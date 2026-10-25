@@ -253,12 +253,13 @@ export default function CameraPage({ params }: CameraPageProps) {
       let previewUrl: string;
 
       if (videoRef.current && cameraReady && !cameraError) {
-        // Instant capture from live 3:4 portrait frame with current zoom
+        // Instant capture from live 3:4 portrait frame with current zoom and xenon flash
         const result = await captureVideoFrame(
           videoRef.current,
           selectedEffect,
           facingMode === "user",
-          zoomLevel
+          zoomLevel,
+          flashMode === "on"
         );
         blob = result.blob;
         previewUrl = result.previewUrl;
@@ -320,7 +321,7 @@ export default function CameraPage({ params }: CameraPageProps) {
       await triggerFlashBurst();
 
       setStatusMessage("Developing analog film...");
-      const { blob, previewUrl } = await applyAnalogFilter(file, selectedEffect);
+      const { blob, previewUrl } = await applyAnalogFilter(file, selectedEffect, flashMode === "on");
       setLastPreview(previewUrl);
 
       const newCount = photosTaken + 1;

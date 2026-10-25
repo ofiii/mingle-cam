@@ -130,7 +130,8 @@ export async function captureVideoFrame(
   video: HTMLVideoElement,
   effect: FilterEffect = "signature",
   isFrontCamera: boolean = false,
-  zoomLevel: number = 1
+  zoomLevel: number = 1,
+  hasFlash: boolean = false
 ): Promise<FilterResult> {
   const videoWidth = video.videoWidth || 1080;
   const videoHeight = video.videoHeight || 1440;
@@ -188,9 +189,9 @@ export async function captureVideoFrame(
   ctx.drawImage(video, sx, sy, targetWidth, targetHeight, 0, 0, outputWidth, outputHeight);
   ctx.restore();
 
-  // Permanently bake vintage color grading & grain into pixel buffer in ONE fast pass
+  // Permanently bake vintage color grading, flash burst & grain into pixel buffer
   const preset = getEffectPreset(effect);
-  applyPixelColorGradingAndGrain(ctx, outputWidth, outputHeight, effect, preset.grainAmount);
+  applyPixelColorGradingAndGrain(ctx, outputWidth, outputHeight, effect, preset.grainAmount, hasFlash);
 
   // Convert to high-quality JPEG Blob (0.86 quality = crisp detail, 4x faster export & upload)
   const blob = await new Promise<Blob>((resolve, reject) => {
@@ -213,7 +214,8 @@ export async function captureVideoFrame(
  */
 export async function applyAnalogFilter(
   file: File,
-  effect: FilterEffect = "signature"
+  effect: FilterEffect = "signature",
+  hasFlash: boolean = false
 ): Promise<FilterResult> {
   const maxDimension = 1440;
   const imageBitmap = await createImageBitmap(file);
@@ -259,7 +261,7 @@ export async function applyAnalogFilter(
   imageBitmap.close();
 
   const preset = getEffectPreset(effect);
-  applyPixelColorGradingAndGrain(ctx, outputWidth, outputHeight, effect, preset.grainAmount);
+  applyPixelColorGradingAndGrain(ctx, outputWidth, outputHeight, effect, preset.grainAmount, hasFlash);
 
   const blob = await new Promise<Blob>((resolve, reject) => {
     canvas.toBlob(
@@ -285,7 +287,8 @@ function applyPixelColorGradingAndGrain(
   width: number,
   height: number,
   effect: FilterEffect,
-  grainAmount: number
+  grainAmount: number,
+  hasFlash: boolean = false
 ) {
   try {
     const imgData = ctx.getImageData(0, 0, width, height);
@@ -485,6 +488,30 @@ function applyPixelColorGradingAndGrain(
           g = mono;
           b = mono;
           break;
+        }
+      }
+
+      // Authentic Disposable Camera Xenon Flash Light Model
+      if (hasFlash) {
+        const pixelIdx = i >> 2;
+        const px = (pixelIdx % width) - (width * 0.5);
+        const py = ((pixelIdx / width) | 0) - (height * 0.44);
+
+        // Normalized squared distance from flash bulb (flash position slightly above center)
+        const dSq = (px * px) / (width * width * 0.28) + (py * py) / (height * height * 0.28);
+
+        // Inverse falloff: strong center direct flash burst (+38%), soft vignette dropoff on background
+        const flashIntensity = Math.max(0.68, 1.40 - dSq * 0.40);
+        r = r * flashIntensity;
+        g = g * flashIntensity;
+        b = b * flashIntensity;
+
+        // Specular xenon flash pop on skin & reflective highlights
+        if (dSq < 1.1 && lum > 110) {
+          const specPop = (lum - 110) * 0.26 * Math.max(0, 1.0 - dSq * 0.7);
+          r += specPop;
+          g += specPop * 0.98;
+          b += specPop * 1.06; // slight crisp xenon tube cool tint
         }
       }
 

@@ -15,6 +15,12 @@ interface CameraPageProps {
   params: Promise<{ eventId: string }>;
 }
 
+interface GuestPhotoItem {
+  id: string;
+  imageUrl: string;
+  createdAt: string;
+}
+
 const MAX_PHOTOS_LIMIT = 20;
 
 export default function CameraPage({ params }: CameraPageProps) {
@@ -23,12 +29,18 @@ export default function CameraPage({ params }: CameraPageProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const [, setStream] = useState<MediaStream | null>(null);
+  const [stream, setStream] = useState<MediaStream | null>(null);
   const [facingMode, setFacingMode] = useState<"environment" | "user">("environment");
   const [selectedEffect, setSelectedEffect] = useState<FilterEffect>("moody");
   const [isProcessing, setIsProcessing] = useState(false);
   const [statusMessage, setStatusMessage] = useState("");
   const [flashActive, setFlashActive] = useState(false);
+
+  // Flash toggle: "off" | "on"
+  const [flashMode, setFlashMode] = useState<"off" | "on">("off");
+
+  // Camera Zoom Level: 0.5 | 1 | 2 (Default is strictly 1x)
+  const [zoomLevel, setZoomLevel] = useState<number>(1);
 
   // Photos taken by this guest (max 20)
   const [photosTaken, setPhotosTaken] = useState(0);
@@ -37,6 +49,12 @@ export default function CameraPage({ params }: CameraPageProps) {
   const [eventName, setEventName] = useState("Mingle Session");
   const [cameraReady, setCameraReady] = useState(false);
   const [cameraError, setCameraError] = useState(false);
+
+  // Manage Guest Photos Modal
+  const [showMyPhotosModal, setShowMyPhotosModal] = useState(false);
+  const [myPhotos, setMyPhotos] = useState<GuestPhotoItem[]>([]);
+  const [loadingMyPhotos, setLoadingMyPhotos] = useState(false);
+  const [deletingPhotoId, setDeletingPhotoId] = useState<string | null>(null);
 
   // Load event details and guest photo count on mount
   useEffect(() => {
@@ -49,6 +67,19 @@ export default function CameraPage({ params }: CameraPageProps) {
         if (data.event?.name) setEventName(data.event.name);
         if (data.currentGuest?.photoCount !== undefined) {
           setPhotosTaken(data.currentGuest.photoCount);
+        }
+      })
+      .catch(() => {});
+
+    // Fetch guest photos to populate initial last preview
+    fetch(`/api/photos?eventId=${eventId}`)
+      .then((res) => res.json())
+      .then((data) => {
+        if (!mounted) return;
+        if (data.photos && data.photos.length > 0) {
+          setMyPhotos(data.photos);
+          setLastPreview(data.photos[0].imageUrl);
+          setPhotosTaken(data.photoCount);
         }
       })
       .catch(() => {});
@@ -108,13 +139,65 @@ export default function CameraPage({ params }: CameraPageProps) {
     };
   }, [facingMode]);
 
+  // Apply Hardware Zoom if supported by camera device
+  useEffect(() => {
+    if (!stream) return;
+    try {
+      const track = stream.getVideoTracks()[0];
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const caps = track?.getCapabilities?.() as any;
+      if (caps && caps.zoom) {
+        const min = caps.zoom.min || 1;
+        const max = caps.zoom.max || 3;
+        const targetZoom = Math.max(min, Math.min(max, zoomLevel));
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        track.applyConstraints({ advanced: [{ zoom: targetZoom } as any] }).catch(() => {});
+      }
+    } catch {
+      // Graceful fallback to software crop/scale
+    }
+  }, [zoomLevel, stream]);
+
   const toggleFacingMode = () => {
     if (isProcessing) return;
     setFacingMode((prev) => (prev === "environment" ? "user" : "environment"));
+    setZoomLevel(1); // Reset zoom to default 1x on camera flip
+  };
+
+  const toggleFlash = () => {
+    setFlashMode((prev) => (prev === "off" ? "on" : "off"));
   };
 
   const isLimitReached = photosTaken >= MAX_PHOTOS_LIMIT;
   const remainingShots = Math.max(0, MAX_PHOTOS_LIMIT - photosTaken);
+
+  // Trigger Flash (Hardware Torch burst + Screen Xenon flash pulse)
+  const triggerFlashBurst = async () => {
+    if (flashMode !== "on") return;
+
+    // Full screen white flash pulse
+    setFlashActive(true);
+    setTimeout(() => setFlashActive(false), 240);
+
+    // Try hardware torch burst if rear camera supports it
+    if (stream && facingMode === "environment") {
+      try {
+        const track = stream.getVideoTracks()[0];
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const caps = track?.getCapabilities?.() as any;
+        if (caps?.torch) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          await track.applyConstraints({ advanced: [{ torch: true } as any] }).catch(() => {});
+          setTimeout(() => {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            track.applyConstraints({ advanced: [{ torch: false } as any] }).catch(() => {});
+          }, 300);
+        }
+      } catch {
+        // Torch not supported
+      }
+    }
+  };
 
   // Capture Photo in 3:4 Portrait
   const handleShutter = async () => {
@@ -124,9 +207,8 @@ export default function CameraPage({ params }: CameraPageProps) {
       navigator.vibrate(40);
     }
 
-    // Flash simulation
-    setFlashActive(true);
-    setTimeout(() => setFlashActive(false), 160);
+    // Flash trigger
+    await triggerFlashBurst();
 
     try {
       setIsProcessing(true);
@@ -136,11 +218,12 @@ export default function CameraPage({ params }: CameraPageProps) {
       let previewUrl: string;
 
       if (videoRef.current && cameraReady && !cameraError) {
-        // Instant capture from live 3:4 portrait frame
+        // Instant capture from live 3:4 portrait frame with current zoom
         const result = await captureVideoFrame(
           videoRef.current,
           selectedEffect,
-          facingMode === "user"
+          facingMode === "user",
+          zoomLevel
         );
         blob = result.blob;
         previewUrl = result.previewUrl;
@@ -154,14 +237,22 @@ export default function CameraPage({ params }: CameraPageProps) {
       setLastPreview(previewUrl);
 
       // Direct R2 upload via presigned URL
-      setStatusMessage("Saving to the event vault...");
+      setStatusMessage("Saving to event vault...");
       await uploadFilteredPhotoToR2({ eventId, blob });
 
       const newCount = photosTaken + 1;
       setPhotosTaken(newCount);
 
+      // Refresh guest photo list
+      fetch(`/api/photos?eventId=${eventId}`)
+        .then((res) => res.json())
+        .then((data) => {
+          if (data.photos) setMyPhotos(data.photos);
+        })
+        .catch(() => {});
+
       if (newCount >= MAX_PHOTOS_LIMIT) {
-        setBannerText("Roll finished! You have used all 20 exposures.");
+        setBannerText("Roll completed! You used all 20 exposures.");
       } else {
         setBannerText(`Photo locked in vault! (${MAX_PHOTOS_LIMIT - newCount} left)`);
       }
@@ -182,21 +273,27 @@ export default function CameraPage({ params }: CameraPageProps) {
 
     try {
       setIsProcessing(true);
-      setFlashActive(true);
-      setTimeout(() => setFlashActive(false), 160);
+      await triggerFlashBurst();
 
       setStatusMessage("Developing analog film...");
       const { blob, previewUrl } = await applyAnalogFilter(file, selectedEffect);
       setLastPreview(previewUrl);
 
-      setStatusMessage("Saving to the event vault...");
+      setStatusMessage("Saving to event vault...");
       await uploadFilteredPhotoToR2({ eventId, blob });
 
       const newCount = photosTaken + 1;
       setPhotosTaken(newCount);
 
+      fetch(`/api/photos?eventId=${eventId}`)
+        .then((res) => res.json())
+        .then((data) => {
+          if (data.photos) setMyPhotos(data.photos);
+        })
+        .catch(() => {});
+
       if (newCount >= MAX_PHOTOS_LIMIT) {
-        setBannerText("Roll finished! You have used all 20 exposures.");
+        setBannerText("Roll completed! You used all 20 exposures.");
       } else {
         setBannerText(`Photo locked in vault! (${MAX_PHOTOS_LIMIT - newCount} left)`);
       }
@@ -211,6 +308,56 @@ export default function CameraPage({ params }: CameraPageProps) {
     }
   };
 
+  // Open My Photos modal
+  const handleOpenMyPhotos = async () => {
+    setShowMyPhotosModal(true);
+    setLoadingMyPhotos(true);
+    try {
+      const res = await fetch(`/api/photos?eventId=${eventId}`);
+      if (res.ok) {
+        const data = await res.json();
+        setMyPhotos(data.photos || []);
+        if (data.photoCount !== undefined) setPhotosTaken(data.photoCount);
+      }
+    } catch (err) {
+      console.error("Failed to load photos", err);
+    } finally {
+      setLoadingMyPhotos(false);
+    }
+  };
+
+  // Delete a photo owned by this guest
+  const handleDeletePhoto = async (photoId: string) => {
+    if (!confirm("Are you sure you want to delete this photo? You will regain 1 shot in your roll.")) {
+      return;
+    }
+
+    try {
+      setDeletingPhotoId(photoId);
+      const res = await fetch(`/api/photos?photoId=${photoId}&eventId=${eventId}`, {
+        method: "DELETE",
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.error || "Failed to delete photo");
+      }
+
+      const data = await res.json();
+      const updatedList = myPhotos.filter((p) => p.id !== photoId);
+      setMyPhotos(updatedList);
+      setPhotosTaken(data.photoCount);
+      setLastPreview(updatedList.length > 0 ? updatedList[0].imageUrl : null);
+
+      setBannerText(`Photo deleted! You now have ${data.remainingPhotos} shots left.`);
+      setTimeout(() => setBannerText(null), 3500);
+    } catch (err: unknown) {
+      alert((err as Error).message || "Error deleting photo");
+    } finally {
+      setDeletingPhotoId(null);
+    }
+  };
+
   const currentPreset = getEffectPreset(selectedEffect);
 
   return (
@@ -222,18 +369,33 @@ export default function CameraPage({ params }: CameraPageProps) {
         }`}
       />
 
-      {/* Top Bar: Event Name & Film Roll Counter */}
+      {/* Top Header: Event Name, Flash Toggle & Film Roll Counter */}
       <header className="w-full max-w-sm flex items-center justify-between py-2 border-b border-[#282128]">
         <div>
           <span className="text-[10px] font-semibold text-stone-400 block uppercase tracking-wider">
             Mingle Disposable
           </span>
-          <h1 className="text-sm font-bold text-stone-100 truncate max-w-[170px]">
+          <h1 className="text-sm font-bold text-stone-100 truncate max-w-[150px]">
             {eventName}
           </h1>
         </div>
 
         <div className="flex items-center space-x-2">
+          {/* Flash Toggle Button */}
+          <button
+            onClick={toggleFlash}
+            aria-label="Toggle Flash"
+            className={`px-2.5 py-1 rounded-full text-xs font-semibold flex items-center space-x-1 border transition-all ${
+              flashMode === "on"
+                ? "bg-amber-400/20 text-amber-300 border-amber-400/50 shadow-sm"
+                : "bg-[#1f1a21] text-stone-400 border-[#3d3240]"
+            }`}
+            title="Toggle Flash (Burst on capture)"
+          >
+            <span>{flashMode === "on" ? "⚡" : "⚡⃠"}</span>
+            <span className="text-[10px] uppercase font-mono">{flashMode}</span>
+          </button>
+
           {/* Film Counter Window */}
           <div className="bg-[#1f1a21] border border-[#3d3240] px-3 py-1 rounded-full flex items-center space-x-1.5 shadow-inner">
             <span className="text-[10px] text-stone-400 font-medium uppercase tracking-wider">LEFT</span>
@@ -242,17 +404,6 @@ export default function CameraPage({ params }: CameraPageProps) {
             </span>
             <span className="text-[10px] text-stone-500 font-mono">/ 20</span>
           </div>
-
-          {/* Flip Camera Button */}
-          <button
-            onClick={toggleFacingMode}
-            disabled={isProcessing}
-            aria-label="Flip Camera"
-            className="w-9 h-9 rounded-full bg-[#1f1a21] border border-[#3d3240] text-stone-300 hover:text-white flex items-center justify-center text-sm active:scale-95 transition-all shadow-sm"
-            title="Switch Front / Rear Camera"
-          >
-            ↻
-          </button>
         </div>
       </header>
 
@@ -272,17 +423,19 @@ export default function CameraPage({ params }: CameraPageProps) {
         </div>
 
         {/* 3:4 PORTRAIT Viewfinder Window */}
-        <div className="w-full aspect-[3/4] max-h-[58vh] bg-black rounded-2xl border-4 border-[#2b0f25] relative flex items-center justify-center overflow-hidden shadow-inner">
-          {/* Live Video Feed with Filter Preview */}
+        <div className="w-full aspect-[3/4] max-h-[55vh] bg-black rounded-2xl border-4 border-[#2b0f25] relative flex items-center justify-center overflow-hidden shadow-inner">
+          {/* Live Video Feed with Filter Preview & Zoom scale */}
           <video
             ref={videoRef}
             autoPlay
             playsInline
             muted
-            style={{ filter: currentPreset.cssFilter }}
-            className={`w-full h-full object-cover transition-[filter] duration-200 ${
-              facingMode === "user" ? "-scale-x-100" : ""
-            } ${cameraError ? "hidden" : "block"}`}
+            style={{
+              filter: currentPreset.cssFilter,
+              transform: `${facingMode === "user" ? "scaleX(-1) " : ""}scale(${zoomLevel})`,
+              transition: "transform 0.2s ease-out, filter 0.2s ease-in-out",
+            }}
+            className={`w-full h-full object-cover origin-center ${cameraError ? "hidden" : "block"}`}
           />
 
           {/* Fallback Screen */}
@@ -301,7 +454,7 @@ export default function CameraPage({ params }: CameraPageProps) {
             </div>
           )}
 
-          {/* Clean Viewfinder Corner Guides (Portrait) */}
+          {/* Viewfinder Corner Framing Guides */}
           <div className="absolute inset-3 pointer-events-none flex items-center justify-center">
             <div className="w-3.5 h-3.5 border-t-2 border-l-2 border-white/40 absolute top-0 left-0 rounded-tl-sm" />
             <div className="w-3.5 h-3.5 border-t-2 border-r-2 border-white/40 absolute top-0 right-0 rounded-tr-sm" />
@@ -313,6 +466,32 @@ export default function CameraPage({ params }: CameraPageProps) {
           {/* Preset Label Badge */}
           <div className="absolute top-2.5 left-2.5 px-2.5 py-1 rounded-md bg-black/60 backdrop-blur-sm text-[11px] font-medium text-stone-200 pointer-events-none">
             {currentPreset.name}
+          </div>
+
+          {/* Flash Indicator on Viewfinder */}
+          {flashMode === "on" && (
+            <div className="absolute top-2.5 right-2.5 px-2 py-0.5 rounded bg-black/60 backdrop-blur-sm text-[10px] text-amber-300 font-mono flex items-center space-x-1 pointer-events-none border border-amber-400/30">
+              <span>⚡</span>
+              <span>FLASH</span>
+            </div>
+          )}
+
+          {/* Zoom Selector Pills (0.5x, 1x, 2x - Default is 1x) */}
+          <div className="absolute bottom-2.5 inset-x-0 flex items-center justify-center space-x-2 z-20 pointer-events-auto">
+            {[0.5, 1, 2].map((z) => (
+              <button
+                key={z}
+                onClick={() => setZoomLevel(z)}
+                disabled={isProcessing}
+                className={`w-8 h-8 rounded-full text-[11px] font-bold font-mono transition-all flex items-center justify-center shadow backdrop-blur-md ${
+                  zoomLevel === z
+                    ? "bg-white text-stone-900 scale-105"
+                    : "bg-black/60 text-stone-300 border border-white/20 hover:text-white"
+                }`}
+              >
+                {z}x
+              </button>
+            ))}
           </div>
 
           {/* Developing State */}
@@ -329,14 +508,14 @@ export default function CameraPage({ params }: CameraPageProps) {
               <span className="text-3xl mb-2">🎞️</span>
               <p className="text-sm font-bold text-white mb-1">Film Roll Completed</p>
               <p className="text-xs text-stone-300 max-w-[220px] mb-3">
-                You have used all 20 exposures. Your photos will reveal at the event party!
+                You used all 20 exposures. Review or delete shots below to free up space!
               </p>
-              <Link
-                href={`/${eventId}/gallery`}
+              <button
+                onClick={handleOpenMyPhotos}
                 className="px-4 py-2 bg-white text-[#461a3d] font-bold text-xs rounded-xl shadow hover:bg-stone-100"
               >
-                View Shared Album →
-              </Link>
+                Review & Manage My Shots →
+              </button>
             </div>
           )}
         </div>
@@ -352,8 +531,8 @@ export default function CameraPage({ params }: CameraPageProps) {
           disabled={isProcessing || isLimitReached}
         />
 
-        {/* 6 Vintage Filter Presets Selector */}
-        <div className="w-full mt-3 grid grid-cols-6 gap-1">
+        {/* Vintage Filter Presets Selector (Horizontal Scrolling Carousel) */}
+        <div className="w-full mt-3 overflow-x-auto pb-1 flex space-x-1.5 scrollbar-thin">
           {EFFECT_PRESETS.map((preset) => {
             const isSelected = selectedEffect === preset.id;
             return (
@@ -361,24 +540,24 @@ export default function CameraPage({ params }: CameraPageProps) {
                 key={preset.id}
                 onClick={() => setSelectedEffect(preset.id)}
                 disabled={isProcessing}
-                className={`py-1.5 px-0.5 rounded-xl text-[9px] font-semibold transition-all text-center flex flex-col items-center justify-center ${
+                className={`flex-shrink-0 py-1.5 px-2 rounded-xl text-[10px] font-semibold transition-all text-center flex items-center space-x-1.5 ${
                   isSelected
                     ? "bg-white text-[#461a3d] shadow-sm font-bold scale-[1.03]"
                     : "bg-[#33112b] text-[#d8a4cb] hover:bg-[#3d1534]"
                 }`}
                 title={preset.description}
               >
-                <span className="text-[12px] leading-none mb-0.5">{preset.icon}</span>
-                <span className="block truncate w-full px-0.5">{preset.name.split(" ")[0]}</span>
+                <span className="text-[12px] leading-none">{preset.icon}</span>
+                <span className="whitespace-nowrap">{preset.name}</span>
               </button>
             );
           })}
         </div>
 
-        {/* Shutter Deck */}
-        <div className="w-full mt-4 pt-2.5 border-t border-[#5d2351] flex items-center justify-around">
+        {/* Shutter Deck: Flip Camera moved to purple card next to LAST */}
+        <div className="w-full mt-3.5 pt-2.5 border-t border-[#5d2351] flex items-center justify-between px-2">
           {/* Used Counter */}
-          <div className="text-center w-14">
+          <div className="text-center w-16">
             <span className="text-[10px] text-[#d8a4cb] uppercase tracking-wider block font-medium">
               USED
             </span>
@@ -390,7 +569,7 @@ export default function CameraPage({ params }: CameraPageProps) {
             onClick={handleShutter}
             disabled={isProcessing || isLimitReached}
             aria-label="Capture Photo"
-            className="group relative flex items-center justify-center active:scale-95 transition-transform disabled:opacity-40 disabled:cursor-not-allowed"
+            className="group relative flex items-center justify-center active:scale-95 transition-transform disabled:opacity-40 disabled:cursor-not-allowed mx-auto"
           >
             <div className="w-18 h-18 rounded-full bg-[#2a0e24] border-2 border-[#6d275f] p-1 flex items-center justify-center shadow-lg">
               <div className="w-14 h-14 rounded-full bg-white group-hover:bg-stone-100 active:bg-stone-200 transition-colors shadow-md flex items-center justify-center">
@@ -399,19 +578,40 @@ export default function CameraPage({ params }: CameraPageProps) {
             </div>
           </button>
 
-          {/* Last Photo Thumbnail */}
-          <div className="text-center w-14 flex flex-col items-center">
-            <span className="text-[10px] text-[#d8a4cb] uppercase tracking-wider block mb-1 font-medium">
-              LAST
-            </span>
-            <div className="w-8 h-8 rounded-lg bg-[#2a0e24] border border-[#5d2351] overflow-hidden flex items-center justify-center">
-              {lastPreview ? (
-                /* eslint-disable-next-line @next/next/no-img-element */
-                <img src={lastPreview} alt="Last capture" className="w-full h-full object-cover" />
-              ) : (
-                <span className="text-[10px] text-stone-500 font-mono">--</span>
-              )}
-            </div>
+          {/* Right Deck: Flip Camera Button + Last Photo Thumbnail */}
+          <div className="flex items-center space-x-2">
+            {/* Front / Rear Camera Flip Button */}
+            <button
+              onClick={toggleFacingMode}
+              disabled={isProcessing}
+              aria-label="Flip Camera"
+              className="w-9 h-9 rounded-full bg-[#2a0e24] border border-[#5d2351] text-stone-200 hover:text-white flex items-center justify-center text-sm active:scale-90 transition-all shadow"
+              title="Switch Front / Rear Camera"
+            >
+              ↻
+            </button>
+
+            {/* Last Photo Thumbnail & Manage Button */}
+            <button
+              onClick={handleOpenMyPhotos}
+              aria-label="View and manage my photos"
+              className="group flex flex-col items-center"
+              title="Click to view & delete your photos"
+            >
+              <div className="w-9 h-9 rounded-lg bg-[#2a0e24] border border-[#5d2351] overflow-hidden flex items-center justify-center group-hover:border-[#9b4288] transition-colors relative">
+                {lastPreview ? (
+                  /* eslint-disable-next-line @next/next/no-img-element */
+                  <img src={lastPreview} alt="Last capture" className="w-full h-full object-cover" />
+                ) : (
+                  <span className="text-[10px] text-stone-500 font-mono">--</span>
+                )}
+                {myPhotos.length > 0 && (
+                  <span className="absolute bottom-0 inset-x-0 bg-black/70 text-[8px] text-stone-200 font-mono text-center">
+                    {myPhotos.length}
+                  </span>
+                )}
+              </div>
+            </button>
           </div>
         </div>
       </main>
@@ -425,7 +625,12 @@ export default function CameraPage({ params }: CameraPageProps) {
 
       {/* Bottom Bar */}
       <footer className="w-full max-w-sm flex items-center justify-between pt-2 border-t border-[#282128] text-xs">
-        <span className="text-stone-400 text-[11px]">3:4 Portrait Frame</span>
+        <button
+          onClick={handleOpenMyPhotos}
+          className="text-stone-400 hover:text-stone-200 text-[11px] underline underline-offset-4"
+        >
+          My Shots ({photosTaken}) 🗑️
+        </button>
         <Link
           href={`/${eventId}/gallery`}
           className="text-[#d8a4cb] hover:text-white text-xs font-semibold underline underline-offset-4 transition-colors"
@@ -433,6 +638,96 @@ export default function CameraPage({ params }: CameraPageProps) {
           View Album Gallery →
         </Link>
       </footer>
+
+      {/* Manage Guest Photos Modal (Allows User to Delete Photos) */}
+      {showMyPhotosModal && (
+        <div
+          onClick={() => setShowMyPhotosModal(false)}
+          className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-end sm:items-center justify-center p-3 sm:p-4"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-md bg-[#1c161d] border border-[#382736] rounded-3xl p-5 shadow-2xl flex flex-col max-h-[85vh]"
+          >
+            {/* Modal Header */}
+            <div className="flex items-center justify-between pb-3 border-b border-[#2e202c]">
+              <div>
+                <h2 className="text-base font-bold text-white">Your Captured Shots</h2>
+                <p className="text-xs text-stone-400">
+                  {photosTaken}/20 shots used • Delete unwanted shots to free roll space
+                </p>
+              </div>
+              <button
+                onClick={() => setShowMyPhotosModal(false)}
+                className="w-8 h-8 rounded-full bg-[#2a1d28] text-stone-400 hover:text-white flex items-center justify-center text-sm"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Photos List */}
+            <div className="flex-1 overflow-y-auto py-4 space-y-3">
+              {loadingMyPhotos ? (
+                <div className="text-center py-12 text-stone-400 text-xs font-medium">
+                  Loading your photos...
+                </div>
+              ) : myPhotos.length === 0 ? (
+                <div className="text-center py-12 text-stone-500 text-xs">
+                  No photos captured yet. Press the shutter button to take your first shot!
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 gap-3">
+                  {myPhotos.map((photo, index) => (
+                    <div
+                      key={photo.id}
+                      className="bg-[#241a23] border border-[#3d2b3b] rounded-2xl p-2 flex flex-col space-y-2 relative group"
+                    >
+                      <div className="w-full aspect-[3/4] rounded-xl overflow-hidden bg-black relative">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={photo.imageUrl}
+                          alt={`Shot #${myPhotos.length - index}`}
+                          className="w-full h-full object-cover"
+                        />
+                      </div>
+
+                      <div className="flex items-center justify-between px-1">
+                        <span className="text-[10px] text-stone-400 font-mono">
+                          {new Date(photo.createdAt).toLocaleTimeString([], {
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}
+                        </span>
+
+                        <button
+                          onClick={() => handleDeletePhoto(photo.id)}
+                          disabled={deletingPhotoId === photo.id}
+                          className="px-2.5 py-1 bg-red-950/80 hover:bg-red-900 border border-red-700/60 text-red-200 rounded-lg text-[10px] font-semibold transition-all flex items-center space-x-1 disabled:opacity-50"
+                        >
+                          <span>{deletingPhotoId === photo.id ? "..." : "Delete 🗑️"}</span>
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="pt-3 border-t border-[#2e202c] flex items-center justify-between text-xs">
+              <span className="text-stone-400 text-[11px]">
+                Remaining: <strong className="text-white font-mono">{remainingShots}</strong> shots
+              </span>
+              <button
+                onClick={() => setShowMyPhotosModal(false)}
+                className="px-4 py-2 bg-[#461a3d] hover:bg-[#59214e] text-white text-xs font-bold rounded-xl border border-[#6b285d]"
+              >
+                Back to Camera
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

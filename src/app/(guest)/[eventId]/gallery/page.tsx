@@ -24,6 +24,7 @@ export default function GalleryPage({ params }: GalleryPageProps) {
   const [totalPhotos, setTotalPhotos] = useState(0);
   const [photos, setPhotos] = useState<PhotoItem[]>([]);
   const [selectedPhoto, setSelectedPhoto] = useState<PhotoItem | null>(null);
+  const [currentGuest, setCurrentGuest] = useState<{ id: string; name: string } | null>(null);
 
   // Countdown state
   const [timeLeft, setTimeLeft] = useState<{
@@ -45,6 +46,9 @@ export default function GalleryPage({ params }: GalleryPageProps) {
 
         setEventName(data.event?.name || "Mingle Session");
         setTotalPhotos(data.event?.totalPhotos || 0);
+        if (data.currentGuest) {
+          setCurrentGuest({ id: data.currentGuest.id, name: data.currentGuest.name });
+        }
 
         const targetDate = new Date(data.event.revealDate);
         setRevealDate(targetDate);
@@ -96,6 +100,20 @@ export default function GalleryPage({ params }: GalleryPageProps) {
 
     return () => clearInterval(timer);
   }, [revealDate, isRevealed, eventId]);
+
+  const handleDeleteFromGallery = async (photoId: string) => {
+    if (!confirm("Are you sure you want to delete this photo from the event album?")) return;
+    try {
+      const res = await fetch(`/api/photos?photoId=${photoId}&eventId=${eventId}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) throw new Error("Could not delete photo");
+      setPhotos((prev) => prev.filter((p) => p.id !== photoId));
+      setSelectedPhoto(null);
+    } catch (err: unknown) {
+      alert((err as Error).message || "Failed to delete photo");
+    }
+  };
 
   if (loading) {
     return (
@@ -262,6 +280,17 @@ export default function GalleryPage({ params }: GalleryPageProps) {
               >
                 Download Original ↗
               </a>
+              {currentGuest && currentGuest.name === selectedPhoto.guest.name && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleDeleteFromGallery(selectedPhoto.id);
+                  }}
+                  className="text-red-400 hover:text-red-300 underline font-medium"
+                >
+                  Delete 🗑️
+                </button>
+              )}
             </div>
           </div>
         </div>

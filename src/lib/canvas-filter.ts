@@ -4,6 +4,10 @@ export type FilterEffect =
   | "portra"
   | "cinestill"
   | "fuji"
+  | "polaroid"
+  | "ektachrome"
+  | "retro80s"
+  | "sepia"
   | "noir";
 
 export interface EffectPreset {
@@ -22,13 +26,13 @@ export const EFFECT_PRESETS: EffectPreset[] = [
     icon: "🥀",
     cssFilter: "contrast(115%) brightness(92%) saturate(95%) sepia(15%)",
     grainAmount: 12,
-    description: "Cinematic, rich jewel tones, soft highlights & lifted matte shadows",
+    description: "Cinematic dark romance, rich jewel greens & lifted matte plum shadows",
   },
   {
     id: "gold200",
     name: "Gold 200",
     icon: "🎞️",
-    cssFilter: "contrast(112%) saturate(105%) sepia(22%) hue-rotate(-6deg) brightness(102%)",
+    cssFilter: "contrast(112%) saturate(106%) sepia(22%) hue-rotate(-6deg) brightness(102%)",
     grainAmount: 14,
     description: "Iconic warm golden hour tones with nostalgic analog grain",
   },
@@ -38,7 +42,7 @@ export const EFFECT_PRESETS: EffectPreset[] = [
     icon: "📷",
     cssFilter: "contrast(106%) saturate(92%) sepia(10%) brightness(104%)",
     grainAmount: 10,
-    description: "Soft skin tones, gentle contrast, and creamy highlights",
+    description: "Soft skin tones, creamy highlights, and flattering natural contrast",
   },
   {
     id: "cinestill",
@@ -46,7 +50,7 @@ export const EFFECT_PRESETS: EffectPreset[] = [
     icon: "🌙",
     cssFilter: "contrast(116%) saturate(110%) hue-rotate(185deg) brightness(98%)",
     grainAmount: 15,
-    description: "Cool tungsten shadows, cinematic halation & vintage night mood",
+    description: "Cool tungsten teal shadows with warm halation glow",
   },
   {
     id: "fuji",
@@ -54,7 +58,39 @@ export const EFFECT_PRESETS: EffectPreset[] = [
     icon: "🌿",
     cssFilter: "contrast(108%) saturate(98%) hue-rotate(10deg) brightness(103%)",
     grainAmount: 11,
-    description: "Crisp emerald greens, airy cyan highlights & Japanese analog feel",
+    description: "Crisp emerald greens, airy cyan highlights & Japanese vintage feel",
+  },
+  {
+    id: "polaroid",
+    name: "Polaroid 600",
+    icon: "🌈",
+    cssFilter: "contrast(98%) saturate(110%) sepia(18%) brightness(105%) hue-rotate(-12deg)",
+    grainAmount: 14,
+    description: "Classic instant camera warmth with soft peach tones & faded cyan shadows",
+  },
+  {
+    id: "ektachrome",
+    name: "Ekta 100",
+    icon: "🏔️",
+    cssFilter: "contrast(122%) saturate(125%) brightness(101%) hue-rotate(5deg)",
+    grainAmount: 12,
+    description: "70s vintage color slide film with deep sky blues & punchy clarity",
+  },
+  {
+    id: "retro80s",
+    name: "Retro 1984",
+    icon: "📼",
+    cssFilter: "contrast(120%) saturate(88%) sepia(28%) brightness(99%) hue-rotate(-15deg)",
+    grainAmount: 18,
+    description: "80s disposable flash camera aesthetic with warm faded film stock",
+  },
+  {
+    id: "sepia",
+    name: "Antique Sepia",
+    icon: "📜",
+    cssFilter: "sepia(85%) contrast(110%) brightness(95%)",
+    grainAmount: 20,
+    description: "1920s antique monochrome sepia print with deep organic grain",
   },
   {
     id: "noir",
@@ -79,32 +115,41 @@ export interface FilterResult {
 
 /**
  * Capture a 3:4 PORTRAIT frame (4:3 portrait) directly from HTMLVideoElement
- * and bake the vintage analog filter permanently into the raw pixel buffer.
+ * Supporting zoom level (0.5x, 1x, 2x) and baking vintage filters into the raw pixels.
  */
 export async function captureVideoFrame(
   video: HTMLVideoElement,
   effect: FilterEffect = "moody",
-  isFrontCamera: boolean = false
+  isFrontCamera: boolean = false,
+  zoomLevel: number = 1
 ): Promise<FilterResult> {
   const videoWidth = video.videoWidth || 1080;
   const videoHeight = video.videoHeight || 1440;
 
-  // Compute 3:4 PORTRAIT crop (width = 3, height = 4)
-  let targetWidth = videoWidth;
-  let targetHeight = Math.round((videoWidth * 4) / 3);
+  // Base 3:4 PORTRAIT crop (width = 3, height = 4)
+  let baseTargetWidth = videoWidth;
+  let baseTargetHeight = Math.round((videoWidth * 4) / 3);
 
-  if (targetHeight > videoHeight) {
-    targetHeight = videoHeight;
-    targetWidth = Math.round((videoHeight * 3) / 4);
+  if (baseTargetHeight > videoHeight) {
+    baseTargetHeight = videoHeight;
+    baseTargetWidth = Math.round((videoHeight * 3) / 4);
   }
 
-  const sx = (videoWidth - targetWidth) / 2;
-  const sy = (videoHeight - targetHeight) / 2;
+  // Adjust crop region based on digital zoomLevel (0.5x, 1x, 2x)
+  const safeZoom = Math.max(0.5, Math.min(3, zoomLevel));
+  // When zoom > 1, sample a smaller center region
+  const cropFactor = safeZoom >= 1 ? 1 / safeZoom : 1;
 
-  // Max dimension 2048 to prevent memory spikes on mobile
+  const targetWidth = Math.round(baseTargetWidth * cropFactor);
+  const targetHeight = Math.round(baseTargetHeight * cropFactor);
+
+  const sx = Math.max(0, (videoWidth - targetWidth) / 2);
+  const sy = Math.max(0, (videoHeight - targetHeight) / 2);
+
+  // Output dimension (target 3:4 portrait)
   const maxDim = 2048;
-  let outputWidth = targetWidth;
-  let outputHeight = targetHeight;
+  let outputWidth = baseTargetWidth;
+  let outputHeight = baseTargetHeight;
   if (outputWidth > maxDim || outputHeight > maxDim) {
     if (outputHeight > outputWidth) {
       outputWidth = Math.round((outputWidth * maxDim) / outputHeight);
@@ -131,7 +176,7 @@ export async function captureVideoFrame(
     ctx.scale(-1, 1);
   }
 
-  // Draw 3:4 portrait frame
+  // Draw 3:4 portrait crop with zoom scaling
   ctx.drawImage(video, sx, sy, targetWidth, targetHeight, 0, 0, outputWidth, outputHeight);
   ctx.restore();
 
@@ -158,7 +203,6 @@ export async function captureVideoFrame(
 
 /**
  * Destructive Analog Filter Processor for raw Files (fallback mode)
- * Also crops / standardizes to 3:4 portrait.
  */
 export async function applyAnalogFilter(
   file: File,
@@ -227,7 +271,7 @@ export async function applyAnalogFilter(
 }
 
 /**
- * Direct Pixel-Level Color Grading for Vintage Film Presets
+ * Direct Pixel-Level Color Grading for 10 Vintage Film Presets
  */
 function applyPixelColorGrading(
   ctx: CanvasRenderingContext2D,
@@ -279,7 +323,6 @@ function applyPixelColorGrading(
           g = mean + (g - mean) * 1.04;
           b = mean + (b - mean) * 0.96;
 
-          // Warm golden tint
           r += 14 * shadowFactor + 4;
           g += 8 * shadowFactor + 2;
           b -= 4;
@@ -297,7 +340,6 @@ function applyPixelColorGrading(
           g = mean + (g - mean) * 0.94;
           b = mean + (b - mean) * 0.90;
 
-          // Creamy warm highlight & lifted pastel shadows
           r = r * 0.96 + 14 * shadowFactor + 4;
           g = g * 0.96 + 12 * shadowFactor + 2;
           b = b * 0.98 + 10 * shadowFactor;
@@ -310,12 +352,10 @@ function applyPixelColorGrading(
 
         case "cinestill": {
           // CineStill 800T: Cool teal/cyan shadows with warm red/orange highlights (halated vintage look)
-          // Teal shadows
           r -= 6 * shadowFactor;
           g += 4 * shadowFactor;
           b += 16 * shadowFactor;
 
-          // Warm halation in brighter areas
           if (lum > 140) {
             const glow = (lum - 140) * 0.12;
             r += glow * 1.4;
@@ -330,12 +370,10 @@ function applyPixelColorGrading(
 
         case "fuji": {
           // Fuji Superia 400H: Crisp emerald greens, clean pastel contrast, slightly cool/cyan tone
-          // Crisp green boost
           g = g * 1.06;
           b = b * 1.02;
           r = r * 0.96;
 
-          // Lifted shadows with faint cyan
           r += 10 * shadowFactor;
           g += 14 * shadowFactor;
           b += 16 * shadowFactor;
@@ -346,11 +384,69 @@ function applyPixelColorGrading(
           break;
         }
 
+        case "polaroid": {
+          // Polaroid 600: Soft peach warmth, faded cyan shadows, gentle highlight roll-off
+          r = r * 1.04 + 16 * shadowFactor;
+          g = g * 0.98 + 12 * shadowFactor;
+          b = b * 0.92 + 20 * shadowFactor; // Lifted faded shadows
+
+          // Soft peach mids
+          r += 8;
+          g += 2;
+
+          r = applySCurve(r, 1.05);
+          g = applySCurve(g, 1.04);
+          b = applySCurve(b, 1.02);
+          break;
+        }
+
+        case "ektachrome": {
+          // Kodak Ektachrome 100: Saturated vintage transparency slide, deep rich blues, high clarity
+          const mean = (r + g + b) / 3;
+          r = mean + (r - mean) * 1.25;
+          g = mean + (g - mean) * 1.22;
+          b = mean + (b - mean) * 1.30;
+
+          // Rich deep contrast
+          r = applySCurve(r, 1.22);
+          g = applySCurve(g, 1.20);
+          b = applySCurve(b, 1.24);
+          break;
+        }
+
+        case "retro80s": {
+          // Retro 1984: Disposable flash camera look, warm yellow/green tint, slightly blown flash center
+          r = r * 1.08 + 14 * shadowFactor;
+          g = g * 1.02 + 10 * shadowFactor;
+          b = b * 0.88;
+
+          r = applySCurve(r, 1.20);
+          g = applySCurve(g, 1.16);
+          b = applySCurve(b, 1.10);
+          break;
+        }
+
+        case "sepia": {
+          // Antique Sepia: 1920s authentic monochrome sepia print
+          const sepiaR = lum * 0.95 + 40;
+          const sepiaG = lum * 0.85 + 20;
+          const sepiaB = lum * 0.65;
+
+          r = Math.min(255, sepiaR * 0.9 + 12 * shadowFactor);
+          g = Math.min(255, sepiaG * 0.9 + 8 * shadowFactor);
+          b = Math.min(255, sepiaB * 0.9);
+
+          r = applySCurve(r, 1.15);
+          g = applySCurve(g, 1.12);
+          b = applySCurve(b, 1.10);
+          break;
+        }
+
         case "noir": {
           // Kodak Tri-X 400 B&W: High-contrast rich monochrome with lifted analog base
           let mono = lum;
           mono = applySCurve(mono, 1.38);
-          mono = mono * 0.95 + 8; // subtle matte black lift
+          mono = mono * 0.95 + 8;
 
           r = mono;
           g = mono;

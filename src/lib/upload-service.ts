@@ -29,13 +29,21 @@ export async function uploadFilteredPhotoToR2({
   const { uploadUrl, s3ObjectKey, imageUrl } = await urlRes.json();
 
   // 2. Direct binary HTTP PUT to Cloudflare R2
-  const r2UploadRes = await fetch(uploadUrl, {
-    method: "PUT",
-    headers: {
-      "Content-Type": "image/jpeg",
-    },
-    body: blob,
-  });
+  let r2UploadRes: Response;
+  try {
+    r2UploadRes = await fetch(uploadUrl, {
+      method: "PUT",
+      headers: {
+        "Content-Type": "image/jpeg",
+      },
+      body: blob,
+    });
+  } catch (err) {
+    console.error("[R2_DIRECT_UPLOAD_FAILED]", err);
+    throw new Error(
+      "Gagal upload ke Cloudflare R2: Pastikan R2_ACCOUNT_ID valid dan CORS Policy sudah diaktifkan pada bucket R2."
+    );
+  }
 
   if (!r2UploadRes.ok) {
     throw new Error(`Direct R2 upload failed with HTTP status ${r2UploadRes.status}`);

@@ -25,7 +25,7 @@ export default function CameraPage({ params }: CameraPageProps) {
 
   const [, setStream] = useState<MediaStream | null>(null);
   const [facingMode, setFacingMode] = useState<"environment" | "user">("environment");
-  const [selectedEffect, setSelectedEffect] = useState<FilterEffect>("vintage");
+  const [selectedEffect, setSelectedEffect] = useState<FilterEffect>("moody");
   const [isProcessing, setIsProcessing] = useState(false);
   const [statusMessage, setStatusMessage] = useState("");
   const [flashActive, setFlashActive] = useState(false);
@@ -353,7 +353,7 @@ export default function CameraPage({ params }: CameraPageProps) {
         />
 
         {/* Clean Filter Preset Selector */}
-        <div className="w-full mt-3.5 grid grid-cols-5 gap-1.5">
+        <div className="w-full mt-3.5 grid grid-cols-6 gap-1">
           {EFFECT_PRESETS.map((preset) => {
             const isSelected = selectedEffect === preset.id;
             return (
@@ -361,13 +361,15 @@ export default function CameraPage({ params }: CameraPageProps) {
                 key={preset.id}
                 onClick={() => setSelectedEffect(preset.id)}
                 disabled={isProcessing}
-                className={`py-1.5 px-1 rounded-xl text-[10px] font-semibold transition-all text-center ${
+                className={`py-1.5 px-0.5 rounded-xl text-[9px] font-semibold transition-all text-center flex flex-col items-center justify-center ${
                   isSelected
-                    ? "bg-white text-[#461a3d] shadow-sm font-bold scale-[1.02]"
+                    ? "bg-white text-[#461a3d] shadow-sm font-bold scale-[1.03]"
                     : "bg-[#33112b] text-[#d8a4cb] hover:bg-[#3d1534]"
                 }`}
+                title={preset.description}
               >
-                <span className="block truncate">{preset.name}</span>
+                <span className="text-[12px] leading-none mb-0.5">{preset.icon}</span>
+                <span className="block truncate w-full px-0.5">{preset.name.split(" ")[0]}</span>
               </button>
             );
           })}

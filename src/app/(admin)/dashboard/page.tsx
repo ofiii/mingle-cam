@@ -209,7 +209,7 @@ export default function AdminDashboardPage() {
                           className={`px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold tracking-wider uppercase border ${
                             isPassed
                               ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30"
-                              : "bg-amber-500/10 text-amber-400 border-amber-500/30"
+                              : "bg-[#461a3d]/40 text-[#d8a4cb] border-[#6b285d]/60"
                           }`}
                         >
                           {isPassed ? "Revealed" : "Locked in Vault"}
@@ -235,7 +235,7 @@ export default function AdminDashboardPage() {
                       </div>
                       <div>
                         <span className="text-stone-500 text-[10px] block">PHOTOS</span>
-                        <span className="text-amber-400 font-bold">{event._count.photos} captured</span>
+                        <span className="text-[#d8a4cb] font-bold">{event._count.photos} captured</span>
                       </div>
                     </div>
 
@@ -244,7 +244,7 @@ export default function AdminDashboardPage() {
                       <Link
                         href={guestUrl}
                         target="_blank"
-                        className="text-stone-300 hover:text-amber-400 underline underline-offset-4 flex items-center space-x-1"
+                        className="text-stone-300 hover:text-[#d8a4cb] underline underline-offset-4 flex items-center space-x-1"
                       >
                         <span>Guest Link ↗</span>
                       </Link>

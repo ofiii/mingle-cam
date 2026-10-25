@@ -57,14 +57,25 @@ export async function GET(
 
     // Check if current guest session cookie exists
     const sessionCookie = req.cookies.get(`mingle_session_${eventId}`)?.value;
-    let currentGuest: { id: string; name: string } | null = null;
+    let currentGuest: { id: string; name: string; photoCount: number } | null = null;
     if (sessionCookie) {
       const guestRecord = await prisma.guest.findUnique({
         where: { sessionToken: sessionCookie },
-        select: { id: true, name: true, eventId: true },
+        select: {
+          id: true,
+          name: true,
+          eventId: true,
+          _count: {
+            select: { photos: true },
+          },
+        },
       });
       if (guestRecord && guestRecord.eventId === eventId) {
-        currentGuest = { id: guestRecord.id, name: guestRecord.name };
+        currentGuest = {
+          id: guestRecord.id,
+          name: guestRecord.name,
+          photoCount: guestRecord._count.photos,
+        };
       }
     }
 

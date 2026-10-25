@@ -22,6 +22,17 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Invalid session" }, { status: 403 });
     }
 
+    const currentCount = await prisma.photo.count({
+      where: { guestId: guest.id, eventId },
+    });
+
+    if (currentCount >= 20) {
+      return NextResponse.json(
+        { error: "Batas 20 foto per orang sudah tercapai!" },
+        { status: 403 }
+      );
+    }
+
     const photo = await prisma.photo.create({
       data: {
         eventId,

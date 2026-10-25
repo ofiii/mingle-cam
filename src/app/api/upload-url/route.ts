@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { PutObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
-import { getR2Client, R2_BUCKET_NAME, R2_PUBLIC_URL } from "@/lib/r2";
+import { getR2Client, R2_BUCKET_NAME } from "@/lib/r2";
 import { prisma } from "@/lib/prisma";
 import crypto from "crypto";
 
@@ -25,6 +25,22 @@ export async function POST(req: NextRequest) {
 
     if (!guest || guest.eventId !== eventId) {
       return NextResponse.json({ error: "Invalid guest session" }, { status: 403 });
+    }
+
+    // Enforce 20 photos per guest limit
+    const MAX_PHOTOS_PER_GUEST = 20;
+    const currentCount = await prisma.photo.count({
+      where: {
+        guestId: guest.id,
+        eventId,
+      },
+    });
+
+    if (currentCount >= MAX_PHOTOS_PER_GUEST) {
+      return NextResponse.json(
+        { error: `Batas maksimal ${MAX_PHOTOS_PER_GUEST} foto per orang sudah tercapai!` },
+        { status: 403 }
+      );
     }
 
     // Generate unique object key

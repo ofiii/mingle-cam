@@ -11,7 +11,7 @@ export interface EffectPreset {
 export const EFFECT_PRESETS: EffectPreset[] = [
   {
     id: "vintage",
-    name: "35mm Analog",
+    name: "Classic 35mm",
     icon: "🎞️",
     cssFilter: "contrast(115%) saturate(85%) sepia(25%) hue-rotate(-8deg)",
     grainAmount: 14,
@@ -25,21 +25,21 @@ export const EFFECT_PRESETS: EffectPreset[] = [
   },
   {
     id: "plum",
-    name: "Plum Dream",
+    name: "Warm Plum",
     icon: "🍇",
     cssFilter: "contrast(112%) saturate(120%) hue-rotate(275deg) brightness(102%)",
     grainAmount: 12,
   },
   {
     id: "vibrant",
-    name: "Cyber 90s",
+    name: "Vivid Color",
     icon: "✨",
     cssFilter: "contrast(125%) saturate(135%) brightness(104%)",
     grainAmount: 10,
   },
   {
     id: "soft",
-    name: "Pastel Bloom",
+    name: "Soft Pastel",
     icon: "🌸",
     cssFilter: "contrast(98%) saturate(85%) brightness(108%)",
     grainAmount: 8,

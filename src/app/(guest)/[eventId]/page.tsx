@@ -22,7 +22,7 @@ export default function GuestLandingPage({ params }: GuestLandingProps) {
       try {
         const res = await fetch(`/api/events/${eventId}`);
         if (!res.ok) {
-          setError("Event not found or invalid link.");
+          setError("Acara tidak ditemukan atau tautan salah.");
           setLoading(false);
           return;
         }
@@ -35,7 +35,7 @@ export default function GuestLandingPage({ params }: GuestLandingProps) {
           return;
         }
       } catch {
-        setError("Failed to load event details.");
+        setError("Gagal memuat detail acara.");
       } finally {
         setLoading(false);
       }
@@ -63,24 +63,23 @@ export default function GuestLandingPage({ params }: GuestLandingProps) {
 
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        throw new Error(data.error || "Failed to register guest");
+        throw new Error(data.error || "Gagal masuk sebagai tamu");
       }
 
-      // Session cookie is set by API Route. Proceed to camera!
       router.push(`/${eventId}/camera`);
     } catch (err: unknown) {
-      setError((err as Error).message || "An unexpected error occurred");
+      setError((err as Error).message || "Terjadi kesalahan. Silakan coba lagi.");
       setSubmitting(false);
     }
   };
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-stone-950 text-stone-100 flex items-center justify-center p-4">
+      <div className="min-h-screen bg-[#131114] text-stone-100 flex items-center justify-center p-4 font-sans">
         <div className="text-center">
-          <div className="w-10 h-10 border-2 border-amber-500 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-          <p className="font-mono text-sm tracking-widest text-amber-500 uppercase">
-            Loading Camera...
+          <div className="w-8 h-8 border-3 border-[#9b4288] border-t-transparent rounded-full animate-spin mx-auto mb-3" />
+          <p className="text-xs text-stone-400 font-medium tracking-wide">
+            Memuat Kamera...
           </p>
         </div>
       </div>
@@ -88,27 +87,24 @@ export default function GuestLandingPage({ params }: GuestLandingProps) {
   }
 
   return (
-    <div className="min-h-screen bg-[#110510] text-fuchsia-50 flex flex-col items-center justify-center p-6 relative overflow-hidden font-sans">
-      {/* Background glow */}
-      <div className="absolute w-96 h-96 bg-[#461a3d]/40 rounded-full blur-3xl pointer-events-none" />
-
-      <div className="w-full max-w-md bg-[#1e071c] border border-[#48153f] rounded-3xl p-6 sm:p-8 shadow-2xl relative z-10">
+    <div className="min-h-screen bg-[#131114] text-stone-100 flex flex-col items-center justify-center p-4 sm:p-6 font-sans select-none">
+      <div className="w-full max-w-sm bg-[#1c161d] border border-[#382736] rounded-3xl p-6 sm:p-8 shadow-xl relative">
         <div className="text-center mb-6">
-          <div className="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-[#461a3d]/50 border border-fuchsia-500/30 text-fuchsia-300 font-mono text-xs font-semibold mb-3">
-            <span>📸</span>
-            <span>Mingle 4:3 Analog Camera</span>
+          <div className="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-[#351a30] text-[#e0b7d6] text-xs font-semibold mb-3 border border-[#52294a]">
+            <span>📷</span>
+            <span>Disposable Camera</span>
           </div>
 
-          <h1 className="text-2xl sm:text-3xl font-extrabold text-fuchsia-100 tracking-tight">
+          <h1 className="text-2xl font-bold text-white tracking-tight">
             {eventName || "Mingle Session"}
           </h1>
-          <p className="text-xs sm:text-sm text-fuchsia-300/80 mt-2 font-mono">
-            Every photo you snap is filtered with vintage analog effects and hidden in the album vault until the grand reveal!
+          <p className="text-xs sm:text-sm text-stone-400 mt-2 leading-relaxed">
+            Abadikan momen seru acara ini dengan kamera analog! Setiap tamu mendapat jatah <strong className="text-stone-200">20 foto</strong> yang tersimpan rahasia sampai pesta reveal.
           </p>
         </div>
 
         {error && (
-          <div className="mb-5 p-3 rounded-lg bg-red-950/50 border border-red-800/60 text-red-300 text-xs font-mono">
+          <div className="mb-4 p-3 rounded-xl bg-red-950/60 border border-red-800/80 text-red-200 text-xs">
             {error}
           </div>
         )}
@@ -117,42 +113,43 @@ export default function GuestLandingPage({ params }: GuestLandingProps) {
           <div>
             <label
               htmlFor="guestName"
-              className="block text-xs font-mono font-medium text-fuchsia-300 uppercase tracking-wider mb-2"
+              className="block text-xs font-semibold text-stone-300 uppercase tracking-wider mb-2"
             >
-              Enter Your Name / Nickname
+              Nama atau Panggilan Kamu
             </label>
             <input
               id="guestName"
               type="text"
               required
               maxLength={40}
-              placeholder="e.g. Alex"
+              placeholder="Contoh: Alex atau Maya"
               value={guestName}
               onChange={(e) => setGuestName(e.target.value)}
               disabled={submitting}
-              className="w-full px-4 py-3 bg-[#130412] border border-[#521747] rounded-xl text-fuchsia-100 placeholder-fuchsia-700/60 focus:outline-none focus:ring-2 focus:ring-fuchsia-500 font-medium text-sm transition-all"
+              className="w-full px-4 py-3 bg-[#140e14] border border-[#3e2b3c] rounded-xl text-stone-100 placeholder-stone-500 focus:outline-none focus:ring-2 focus:ring-[#9b4288] font-medium text-sm transition-all"
             />
           </div>
 
           <button
             type="submit"
             disabled={submitting || !guestName.trim()}
-            className="w-full py-3.5 bg-gradient-to-r from-[#7a2265] to-[#a82d8c] hover:brightness-110 text-fuchsia-50 font-bold rounded-xl shadow-lg transition-transform active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed font-mono uppercase tracking-wider text-sm flex items-center justify-center space-x-2 border border-fuchsia-400/30"
+            className="w-full py-3.5 bg-[#461a3d] hover:bg-[#59214e] text-white font-bold rounded-xl shadow transition-transform active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed text-sm flex items-center justify-center space-x-2 border border-[#6b285d]"
           >
             {submitting ? (
               <>
-                <div className="w-4 h-4 border-2 border-stone-950 border-t-transparent rounded-full animate-spin" />
-                <span>Loading Film...</span>
+                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                <span>Menyiapkan Kamera...</span>
               </>
             ) : (
-              <span>Grab Your Camera 📷</span>
+              <span>Ambil Kamera 📷</span>
             )}
           </button>
         </form>
 
-        <div className="mt-6 pt-5 border-t border-stone-800/80 flex items-center justify-between text-[11px] font-mono text-stone-500">
-          <span>🔒 One-click Mobile Cookie</span>
-          <span>⚡ Direct R2 Storage</span>
+        <div className="mt-6 pt-4 border-t border-[#2e202c] text-center">
+          <span className="text-[11px] text-stone-500 block">
+            Roll film digital • 4:3 Vintage Lens • 20 foto per orang
+          </span>
         </div>
       </div>
     </div>

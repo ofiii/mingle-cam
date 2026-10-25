@@ -36,7 +36,21 @@ export default function AdminDashboardPage() {
   };
 
   useEffect(() => {
-    fetchEvents();
+    let active = true;
+    fetch("/api/events")
+      .then((res) => res.json())
+      .then((data) => {
+        if (active) {
+          setEvents(data.events || []);
+          setLoading(false);
+        }
+      })
+      .catch(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
   }, []);
 
   const handleCreateEvent = async (e: React.FormEvent) => {
@@ -93,8 +107,8 @@ export default function AdminDashboardPage() {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-6 border-b border-stone-800 gap-4">
           <div>
             <div className="flex items-center space-x-2">
-              <span className="w-2.5 h-2.5 rounded-full bg-amber-500" />
-              <span className="text-xs font-mono uppercase text-amber-500 font-bold tracking-wider">
+              <span className="w-2.5 h-2.5 rounded-full bg-[#9b4288]" />
+              <span className="text-xs font-semibold uppercase text-[#d8a4cb] tracking-wider">
                 Event Organizer Console
               </span>
             </div>
@@ -103,14 +117,14 @@ export default function AdminDashboardPage() {
             </h1>
           </div>
 
-          <div className="font-mono text-xs text-stone-400">
+          <div className="text-xs text-stone-400">
             <span>R2 Storage: </span>
             <span className="text-emerald-400 font-bold">Connected</span>
           </div>
         </div>
 
         {actionMessage && (
-          <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-400 font-mono text-xs flex items-center space-x-2">
+          <div className="p-4 rounded-xl bg-[#461a3d]/40 border border-[#7a2e6b] text-stone-200 text-xs flex items-center space-x-2">
             <span>✨</span>
             <span>{actionMessage}</span>
           </div>
@@ -134,7 +148,7 @@ export default function AdminDashboardPage() {
                 placeholder="e.g. Friday Mingle & Cocktails"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                className="w-full px-4 py-2.5 bg-stone-950 border border-stone-700 rounded-xl text-stone-100 placeholder-stone-600 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+                className="w-full px-4 py-2.5 bg-stone-950 border border-stone-700 rounded-xl text-stone-100 placeholder-stone-600 text-sm focus:outline-none focus:ring-2 focus:ring-[#9b4288]"
               />
             </div>
 
@@ -147,7 +161,7 @@ export default function AdminDashboardPage() {
                 required
                 value={revealDate}
                 onChange={(e) => setRevealDate(e.target.value)}
-                className="w-full px-4 py-2.5 bg-stone-950 border border-stone-700 rounded-xl text-stone-100 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+                className="w-full px-4 py-2.5 bg-stone-950 border border-stone-700 rounded-xl text-stone-100 text-sm focus:outline-none focus:ring-2 focus:ring-[#9b4288]"
               />
             </div>
 
@@ -155,7 +169,7 @@ export default function AdminDashboardPage() {
               <button
                 type="submit"
                 disabled={creating}
-                className="w-full py-2.5 bg-amber-500 hover:bg-amber-400 text-stone-950 font-bold rounded-xl transition-all font-mono uppercase tracking-wider text-xs shadow disabled:opacity-50"
+                className="w-full py-2.5 bg-[#461a3d] hover:bg-[#59214e] text-white font-bold rounded-xl transition-all uppercase tracking-wider text-xs shadow border border-[#6b285d] disabled:opacity-50"
               >
                 {creating ? "Creating..." : "Launch Event 🚀"}
               </button>
@@ -247,7 +261,7 @@ export default function AdminDashboardPage() {
                         {!isPassed && (
                           <button
                             onClick={() => handleInstantReveal(event.id)}
-                            className="px-3 py-1.5 bg-amber-500 hover:bg-amber-400 text-stone-950 font-bold rounded-lg text-xs"
+                            className="px-3 py-1.5 bg-[#461a3d] hover:bg-[#59214e] text-white font-bold rounded-lg text-xs border border-[#6b285d] transition-colors"
                           >
                             Reveal Now 🔓
                           </button>

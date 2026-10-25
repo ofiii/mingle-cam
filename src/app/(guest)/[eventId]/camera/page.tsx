@@ -199,8 +199,24 @@ export default function CameraPage({ params }: CameraPageProps) {
     setZoomLevel(1); // Reset zoom to default 1x on camera flip
   };
 
-  const toggleFlash = () => {
-    setFlashMode((prev) => (prev === "off" ? "on" : "off"));
+  const toggleFlash = async () => {
+    const nextMode = flashMode === "off" ? "on" : "off";
+    setFlashMode(nextMode);
+
+    // If hardware torch is supported on rear camera, turn it on
+    if (stream && facingMode === "environment") {
+      try {
+        const track = stream.getVideoTracks()[0];
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const caps = track?.getCapabilities?.() as any;
+        if (caps?.torch) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          await track.applyConstraints({ advanced: [{ torch: nextMode === "on" } as any] }).catch(() => {});
+        }
+      } catch {
+        // Torch not supported on iOS Safari
+      }
+    }
   };
 
   const isLimitReached = photosTaken >= maxPhotosLimit;
@@ -214,7 +230,7 @@ export default function CameraPage({ params }: CameraPageProps) {
     setFlashActive(true);
     setTimeout(() => setFlashActive(false), 240);
 
-    // Try hardware torch burst if rear camera supports it
+    // If hardware torch was off, pulse it
     if (stream && facingMode === "environment") {
       try {
         const track = stream.getVideoTracks()[0];
@@ -226,7 +242,7 @@ export default function CameraPage({ params }: CameraPageProps) {
           setTimeout(() => {
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             track.applyConstraints({ advanced: [{ torch: false } as any] }).catch(() => {});
-          }, 300);
+          }, 350);
         }
       } catch {
         // Torch not supported

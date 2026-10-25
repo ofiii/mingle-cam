@@ -491,27 +491,35 @@ function applyPixelColorGradingAndGrain(
         }
       }
 
-      // Authentic Disposable Camera Xenon Flash Light Model
+      // Authentic Disposable Camera Xenon Flash Light Model (Additive Illumination)
       if (hasFlash) {
         const pixelIdx = i >> 2;
         const px = (pixelIdx % width) - (width * 0.5);
         const py = ((pixelIdx / width) | 0) - (height * 0.44);
 
-        // Normalized squared distance from flash bulb (flash position slightly above center)
-        const dSq = (px * px) / (width * width * 0.28) + (py * py) / (height * height * 0.28);
+        // Distance from center flash position
+        const distNorm = Math.sqrt((px * px) / (width * width * 0.25) + (py * py) / (height * height * 0.25));
 
-        // Inverse falloff: strong center direct flash burst (+38%), soft vignette dropoff on background
-        const flashIntensity = Math.max(0.68, 1.40 - dSq * 0.40);
-        r = r * flashIntensity;
-        g = g * flashIntensity;
-        b = b * flashIntensity;
+        // Flash falloff factor (1.0 at center, ~0.20 at corners)
+        const falloff = Math.max(0.18, 1.0 - distNorm * 0.55);
 
-        // Specular xenon flash pop on skin & reflective highlights
-        if (dSq < 1.1 && lum > 110) {
-          const specPop = (lum - 110) * 0.26 * Math.max(0, 1.0 - dSq * 0.7);
-          r += specPop;
-          g += specPop * 0.98;
-          b += specPop * 1.06; // slight crisp xenon tube cool tint
+        // 1. Direct Additive Xenon Flash Photons (transforms dark scenes into bright, clear photos!)
+        const directFlashFill = 55 * falloff;
+
+        // 2. Dynamic Shadow Recovery (brightens pitch dark shadows by up to +40)
+        const shadowRecovery = Math.max(0, 1 - lum / 160) * 40 * falloff;
+
+        // 3. Multiplicative exposure boost
+        r = r * 1.30 + directFlashFill + shadowRecovery;
+        g = g * 1.30 + directFlashFill + shadowRecovery;
+        b = b * 1.30 + directFlashFill + shadowRecovery;
+
+        // 4. Specular Xenon Tube Highlight Punch on reflective surfaces & skin
+        if (lum > 65) {
+          const specPop = (lum - 65) * 0.35 * falloff;
+          r += specPop * 1.04;
+          g += specPop * 1.02;
+          b += specPop * 1.10; // characteristic cool white xenon tube flare
         }
       }
 

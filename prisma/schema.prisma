@@ -1,0 +1,49 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model Event {
+  id          String   @id @default(uuid())
+  name        String
+  revealDate  DateTime
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  guests      Guest[]
+  photos      Photo[]
+
+  @@index([revealDate])
+}
+
+model Guest {
+  id           String   @id @default(uuid())
+  eventId      String
+  name         String
+  sessionToken String   @unique @default(uuid())
+  createdAt    DateTime @default(now())
+  event        Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  photos       Photo[]
+
+  @@index([eventId])
+  @@index([sessionToken])
+}
+
+model Photo {
+  id          String   @id @default(uuid())
+  guestId     String
+  eventId     String
+  s3ObjectKey String   @unique
+  imageUrl    String
+  isRevealed  Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  guest       Guest    @relation(fields: [guestId], references: [id], onDelete: Cascade)
+  event       Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@index([eventId, isRevealed])
+  @@index([guestId])
+}

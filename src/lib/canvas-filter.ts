@@ -1,4 +1,10 @@
-export type FilterEffect = "moody" | "vintage" | "noir" | "plum" | "vibrant" | "soft";
+export type FilterEffect =
+  | "moody"
+  | "gold200"
+  | "portra"
+  | "cinestill"
+  | "fuji"
+  | "noir";
 
 export interface EffectPreset {
   id: FilterEffect;
@@ -19,44 +25,44 @@ export const EFFECT_PRESETS: EffectPreset[] = [
     description: "Cinematic, rich jewel tones, soft highlights & lifted matte shadows",
   },
   {
-    id: "vintage",
-    name: "Classic 35mm",
+    id: "gold200",
+    name: "Gold 200",
     icon: "🎞️",
-    cssFilter: "contrast(112%) saturate(90%) sepia(25%) hue-rotate(-8deg)",
+    cssFilter: "contrast(112%) saturate(105%) sepia(22%) hue-rotate(-6deg) brightness(102%)",
     grainAmount: 14,
-    description: "Authentic warm disposable 35mm film",
+    description: "Iconic warm golden hour tones with nostalgic analog grain",
+  },
+  {
+    id: "portra",
+    name: "Portra 400",
+    icon: "📷",
+    cssFilter: "contrast(106%) saturate(92%) sepia(10%) brightness(104%)",
+    grainAmount: 10,
+    description: "Soft skin tones, gentle contrast, and creamy highlights",
+  },
+  {
+    id: "cinestill",
+    name: "Cine 800T",
+    icon: "🌙",
+    cssFilter: "contrast(116%) saturate(110%) hue-rotate(185deg) brightness(98%)",
+    grainAmount: 15,
+    description: "Cool tungsten shadows, cinematic halation & vintage night mood",
+  },
+  {
+    id: "fuji",
+    name: "Fuji 400H",
+    icon: "🌿",
+    cssFilter: "contrast(108%) saturate(98%) hue-rotate(10deg) brightness(103%)",
+    grainAmount: 11,
+    description: "Crisp emerald greens, airy cyan highlights & Japanese analog feel",
   },
   {
     id: "noir",
-    name: "B&W Noir",
+    name: "Tri-X 400",
     icon: "🖤",
-    cssFilter: "grayscale(100%) contrast(135%) brightness(95%)",
-    grainAmount: 16,
-    description: "High-contrast monochrome with deep rich shadows",
-  },
-  {
-    id: "plum",
-    name: "Warm Plum",
-    icon: "🍇",
-    cssFilter: "contrast(110%) saturate(115%) hue-rotate(275deg) brightness(98%)",
-    grainAmount: 12,
-    description: "Atmospheric plum & violet floral undertones",
-  },
-  {
-    id: "vibrant",
-    name: "Vivid Color",
-    icon: "✨",
-    cssFilter: "contrast(120%) saturate(130%) brightness(102%)",
-    grainAmount: 10,
-    description: "Punchy 90s party color saturation",
-  },
-  {
-    id: "soft",
-    name: "Soft Pastel",
-    icon: "🌸",
-    cssFilter: "contrast(96%) saturate(88%) brightness(106%)",
-    grainAmount: 8,
-    description: "Dreamy diffused light with delicate tones",
+    cssFilter: "grayscale(100%) contrast(140%) brightness(94%)",
+    grainAmount: 18,
+    description: "Timeless high-contrast black & white documentary film",
   },
 ];
 
@@ -72,40 +78,40 @@ export interface FilterResult {
 }
 
 /**
- * Capture a 4:3 frame directly from a live HTMLVideoElement and bake the analog filter
- * permanently into the pixel buffer so it never disappears on mobile browsers/Safari.
+ * Capture a 3:4 PORTRAIT frame (4:3 portrait) directly from HTMLVideoElement
+ * and bake the vintage analog filter permanently into the raw pixel buffer.
  */
 export async function captureVideoFrame(
   video: HTMLVideoElement,
   effect: FilterEffect = "moody",
   isFrontCamera: boolean = false
 ): Promise<FilterResult> {
-  const videoWidth = video.videoWidth || 1280;
-  const videoHeight = video.videoHeight || 960;
+  const videoWidth = video.videoWidth || 1080;
+  const videoHeight = video.videoHeight || 1440;
 
-  // Compute 4:3 crop dimension
+  // Compute 3:4 PORTRAIT crop (width = 3, height = 4)
   let targetWidth = videoWidth;
-  let targetHeight = Math.round((videoWidth * 3) / 4);
+  let targetHeight = Math.round((videoWidth * 4) / 3);
 
   if (targetHeight > videoHeight) {
     targetHeight = videoHeight;
-    targetWidth = Math.round((videoHeight * 4) / 3);
+    targetWidth = Math.round((videoHeight * 3) / 4);
   }
 
   const sx = (videoWidth - targetWidth) / 2;
   const sy = (videoHeight - targetHeight) / 2;
 
-  // Cap max dimension to 2048 to prevent memory spikes on mobile
+  // Max dimension 2048 to prevent memory spikes on mobile
   const maxDim = 2048;
   let outputWidth = targetWidth;
   let outputHeight = targetHeight;
   if (outputWidth > maxDim || outputHeight > maxDim) {
-    if (outputWidth > outputHeight) {
-      outputHeight = Math.round((outputHeight * maxDim) / outputWidth);
-      outputWidth = maxDim;
-    } else {
+    if (outputHeight > outputWidth) {
       outputWidth = Math.round((outputWidth * maxDim) / outputHeight);
       outputHeight = maxDim;
+    } else {
+      outputHeight = Math.round((outputHeight * maxDim) / outputWidth);
+      outputWidth = maxDim;
     }
   }
 
@@ -119,22 +125,22 @@ export async function captureVideoFrame(
   }
 
   ctx.save();
-  // Flip horizontally if front camera (mirror selfie mode)
+  // Mirror selfie if front camera
   if (isFrontCamera) {
     ctx.translate(outputWidth, 0);
     ctx.scale(-1, 1);
   }
 
-  // Draw raw video frame (clean copy)
+  // Draw 3:4 portrait frame
   ctx.drawImage(video, sx, sy, targetWidth, targetHeight, 0, 0, outputWidth, outputHeight);
   ctx.restore();
 
-  // Permanently bake the color grading & analog film grain into the raw pixel buffer
+  // Permanently bake vintage color grading & grain into pixel buffer
   const preset = getEffectPreset(effect);
   applyPixelColorGrading(ctx, outputWidth, outputHeight, effect);
   applyFilmGrain(ctx, outputWidth, outputHeight, preset.grainAmount);
 
-  // Convert to high-quality JPEG Blob (No date stamp!)
+  // Convert to high-quality JPEG Blob
   const blob = await new Promise<Blob>((resolve, reject) => {
     canvas.toBlob(
       (b) => {
@@ -152,6 +158,7 @@ export async function captureVideoFrame(
 
 /**
  * Destructive Analog Filter Processor for raw Files (fallback mode)
+ * Also crops / standardizes to 3:4 portrait.
  */
 export async function applyAnalogFilter(
   file: File,
@@ -160,20 +167,36 @@ export async function applyAnalogFilter(
   const maxDimension = 2048;
   const imageBitmap = await createImageBitmap(file);
 
-  let { width, height } = imageBitmap;
-  if (width > maxDimension || height > maxDimension) {
-    if (width > height) {
-      height = Math.round((height * maxDimension) / width);
-      width = maxDimension;
+  const origWidth = imageBitmap.width;
+  const origHeight = imageBitmap.height;
+
+  // Compute 3:4 crop
+  let targetWidth = origWidth;
+  let targetHeight = Math.round((origWidth * 4) / 3);
+
+  if (targetHeight > origHeight) {
+    targetHeight = origHeight;
+    targetWidth = Math.round((origHeight * 3) / 4);
+  }
+
+  const sx = (origWidth - targetWidth) / 2;
+  const sy = (origHeight - targetHeight) / 2;
+
+  let outputWidth = targetWidth;
+  let outputHeight = targetHeight;
+  if (outputWidth > maxDimension || outputHeight > maxDimension) {
+    if (outputHeight > outputWidth) {
+      outputWidth = Math.round((outputWidth * maxDimension) / outputHeight);
+      outputHeight = maxDimension;
     } else {
-      width = Math.round((width * maxDimension) / height);
-      height = maxDimension;
+      outputHeight = Math.round((outputHeight * maxDimension) / outputWidth);
+      outputWidth = maxDimension;
     }
   }
 
   const canvas = document.createElement("canvas");
-  canvas.width = width;
-  canvas.height = height;
+  canvas.width = outputWidth;
+  canvas.height = outputHeight;
   const ctx = canvas.getContext("2d", { willReadFrequently: true });
 
   if (!ctx) {
@@ -181,12 +204,12 @@ export async function applyAnalogFilter(
     throw new Error("Unable to obtain 2D canvas context");
   }
 
-  ctx.drawImage(imageBitmap, 0, 0, width, height);
+  ctx.drawImage(imageBitmap, sx, sy, targetWidth, targetHeight, 0, 0, outputWidth, outputHeight);
   imageBitmap.close();
 
   const preset = getEffectPreset(effect);
-  applyPixelColorGrading(ctx, width, height, effect);
-  applyFilmGrain(ctx, width, height, preset.grainAmount);
+  applyPixelColorGrading(ctx, outputWidth, outputHeight, effect);
+  applyFilmGrain(ctx, outputWidth, outputHeight, preset.grainAmount);
 
   const blob = await new Promise<Blob>((resolve, reject) => {
     canvas.toBlob(
@@ -200,12 +223,11 @@ export async function applyAnalogFilter(
   });
 
   const previewUrl = URL.createObjectURL(blob);
-  return { blob, previewUrl, width, height };
+  return { blob, previewUrl, width: outputWidth, height: outputHeight };
 }
 
 /**
- * Direct Pixel-Level Color Grading Pipeline
- * Works identically across all mobile platforms (including iOS Safari).
+ * Direct Pixel-Level Color Grading for Vintage Film Presets
  */
 function applyPixelColorGrading(
   ctx: CanvasRenderingContext2D,
@@ -225,22 +247,18 @@ function applyPixelColorGrading(
 
       const lum = 0.299 * r + 0.587 * g + 0.114 * b;
       const shadowFactor = Math.max(0, 1 - lum / 160);
-      const highlightFactor = Math.max(0, (lum - 120) / 135);
 
       switch (effect) {
         case "moody": {
           // Moody Editorial Wedding (Lifted matte blacks, rich plum shadow tint, muted highlights, deep jewel tones)
-          // Lift deep blacks to a soft matte ~16-22
           r = r * 0.92 + 18 * shadowFactor;
           g = g * 0.90 + 8 * shadowFactor;
           b = b * 0.90 + 22 * shadowFactor;
 
-          // Add subtle rich plum/burgundy undertone in midtones/shadows
           r += 10 * shadowFactor;
           b += 14 * shadowFactor;
           g -= 4 * shadowFactor;
 
-          // Gently compress bright highlights (soft diffused light, no harsh clipping)
           if (lum > 180) {
             const compress = (lum - 180) * 0.15;
             r -= compress;
@@ -248,82 +266,95 @@ function applyPixelColorGrading(
             b -= compress * 0.6;
           }
 
-          // Gentle S-curve contrast on midtones
           r = applySCurve(r, 1.15);
           g = applySCurve(g, 1.12);
           b = applySCurve(b, 1.15);
           break;
         }
 
-        case "vintage": {
-          // Classic 35mm warm tone, gentle sepia, slight contrast boost, lifted warm blacks
-          const sepiaR = lum + 35;
-          const sepiaG = lum + 15;
-          const sepiaB = lum - 15;
+        case "gold200": {
+          // Kodak Gold 200: Warm golden hour, rich amber mids, warm shadows, slight saturation
+          const mean = (r + g + b) / 3;
+          r = mean + (r - mean) * 1.08;
+          g = mean + (g - mean) * 1.04;
+          b = mean + (b - mean) * 0.96;
 
-          r = r * 0.72 + sepiaR * 0.28;
-          g = g * 0.76 + sepiaG * 0.24;
-          b = b * 0.78 + sepiaB * 0.22;
+          // Warm golden tint
+          r += 14 * shadowFactor + 4;
+          g += 8 * shadowFactor + 2;
+          b -= 4;
 
-          // Lift shadows slightly with warm amber
-          r += 12 * shadowFactor;
-          g += 6 * shadowFactor;
-          b += 2 * shadowFactor;
-
-          r = applySCurve(r, 1.12);
+          r = applySCurve(r, 1.14);
           g = applySCurve(g, 1.10);
+          b = applySCurve(b, 1.08);
+          break;
+        }
+
+        case "portra": {
+          // Kodak Portra 400: Flattering soft skin tones, creamy highlights, gentle contrast
+          const mean = (r + g + b) / 3;
+          r = mean + (r - mean) * 0.96;
+          g = mean + (g - mean) * 0.94;
+          b = mean + (b - mean) * 0.90;
+
+          // Creamy warm highlight & lifted pastel shadows
+          r = r * 0.96 + 14 * shadowFactor + 4;
+          g = g * 0.96 + 12 * shadowFactor + 2;
+          b = b * 0.98 + 10 * shadowFactor;
+
+          r = applySCurve(r, 1.06);
+          g = applySCurve(g, 1.05);
+          b = applySCurve(b, 1.04);
+          break;
+        }
+
+        case "cinestill": {
+          // CineStill 800T: Cool teal/cyan shadows with warm red/orange highlights (halated vintage look)
+          // Teal shadows
+          r -= 6 * shadowFactor;
+          g += 4 * shadowFactor;
+          b += 16 * shadowFactor;
+
+          // Warm halation in brighter areas
+          if (lum > 140) {
+            const glow = (lum - 140) * 0.12;
+            r += glow * 1.4;
+            g += glow * 0.6;
+          }
+
+          r = applySCurve(r, 1.16);
+          g = applySCurve(g, 1.12);
+          b = applySCurve(b, 1.18);
+          break;
+        }
+
+        case "fuji": {
+          // Fuji Superia 400H: Crisp emerald greens, clean pastel contrast, slightly cool/cyan tone
+          // Crisp green boost
+          g = g * 1.06;
+          b = b * 1.02;
+          r = r * 0.96;
+
+          // Lifted shadows with faint cyan
+          r += 10 * shadowFactor;
+          g += 14 * shadowFactor;
+          b += 16 * shadowFactor;
+
+          r = applySCurve(r, 1.10);
+          g = applySCurve(g, 1.12);
           b = applySCurve(b, 1.10);
           break;
         }
 
         case "noir": {
-          // B&W Noir: Pure monochrome with high micro-contrast and deep shadows
+          // Kodak Tri-X 400 B&W: High-contrast rich monochrome with lifted analog base
           let mono = lum;
-          mono = applySCurve(mono, 1.35);
-          // Slight matte black lift for analog print feel
-          mono = mono * 0.96 + 6;
+          mono = applySCurve(mono, 1.38);
+          mono = mono * 0.95 + 8; // subtle matte black lift
 
           r = mono;
           g = mono;
           b = mono;
-          break;
-        }
-
-        case "plum": {
-          // Warm Plum: Rich violet & plum cast
-          r = r * 1.05 + 14 * shadowFactor;
-          g = g * 0.92;
-          b = b * 1.12 + 18 * shadowFactor;
-
-          r = applySCurve(r, 1.14);
-          g = applySCurve(g, 1.08);
-          b = applySCurve(b, 1.14);
-          break;
-        }
-
-        case "vibrant": {
-          // Vivid Color: 90s disposable saturated look
-          const mean = (r + g + b) / 3;
-          r = mean + (r - mean) * 1.32;
-          g = mean + (g - mean) * 1.30;
-          b = mean + (b - mean) * 1.28;
-
-          r = applySCurve(r, 1.18);
-          g = applySCurve(g, 1.18);
-          b = applySCurve(b, 1.18);
-          break;
-        }
-
-        case "soft": {
-          // Soft Pastel: Dreamy, lowered contrast, airy highlights
-          r = r * 0.94 + 20;
-          g = g * 0.94 + 20;
-          b = b * 0.95 + 24;
-
-          // Soft highlight bloom
-          r += 10 * highlightFactor;
-          g += 8 * highlightFactor;
-          b += 12 * highlightFactor;
           break;
         }
       }
@@ -339,16 +370,10 @@ function applyPixelColorGrading(
   }
 }
 
-/**
- * Fast S-curve contrast formula around mid-tone 128
- */
 function applySCurve(val: number, contrast: number): number {
   return 128 + (val - 128) * contrast;
 }
 
-/**
- * Apply per-pixel analog film grain noise
- */
 function applyFilmGrain(
   ctx: CanvasRenderingContext2D,
   width: number,
@@ -369,6 +394,6 @@ function applyFilmGrain(
     }
     ctx.putImageData(imageData, 0, 0);
   } catch {
-    // Graceful fallback if cross-origin buffer security forbids reading
+    // Graceful fallback
   }
 }

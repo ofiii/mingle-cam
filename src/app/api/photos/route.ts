@@ -28,7 +28,7 @@ export async function POST(req: NextRequest) {
 
     if (currentCount >= 20) {
       return NextResponse.json(
-        { error: "Batas 20 foto per orang sudah tercapai!" },
+        { error: "Limit of 20 photos per guest reached!" },
         { status: 403 }
       );
     }

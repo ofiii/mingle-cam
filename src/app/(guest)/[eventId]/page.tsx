@@ -22,7 +22,7 @@ export default function GuestLandingPage({ params }: GuestLandingProps) {
       try {
         const res = await fetch(`/api/events/${eventId}`);
         if (!res.ok) {
-          setError("Acara tidak ditemukan atau tautan salah.");
+          setError("Event not found or link is invalid.");
           setLoading(false);
           return;
         }
@@ -35,7 +35,7 @@ export default function GuestLandingPage({ params }: GuestLandingProps) {
           return;
         }
       } catch {
-        setError("Gagal memuat detail acara.");
+        setError("Failed to load event details.");
       } finally {
         setLoading(false);
       }
@@ -63,12 +63,12 @@ export default function GuestLandingPage({ params }: GuestLandingProps) {
 
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        throw new Error(data.error || "Gagal masuk sebagai tamu");
+        throw new Error(data.error || "Failed to join event");
       }
 
       router.push(`/${eventId}/camera`);
     } catch (err: unknown) {
-      setError((err as Error).message || "Terjadi kesalahan. Silakan coba lagi.");
+      setError((err as Error).message || "An unexpected error occurred. Please try again.");
       setSubmitting(false);
     }
   };
@@ -79,7 +79,7 @@ export default function GuestLandingPage({ params }: GuestLandingProps) {
         <div className="text-center">
           <div className="w-8 h-8 border-3 border-[#9b4288] border-t-transparent rounded-full animate-spin mx-auto mb-3" />
           <p className="text-xs text-stone-400 font-medium tracking-wide">
-            Memuat Kamera...
+            Loading Camera...
           </p>
         </div>
       </div>
@@ -92,14 +92,14 @@ export default function GuestLandingPage({ params }: GuestLandingProps) {
         <div className="text-center mb-6">
           <div className="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-[#351a30] text-[#e0b7d6] text-xs font-semibold mb-3 border border-[#52294a]">
             <span>📷</span>
-            <span>Disposable Camera</span>
+            <span>Shared Disposable Camera</span>
           </div>
 
           <h1 className="text-2xl font-bold text-white tracking-tight">
             {eventName || "Mingle Session"}
           </h1>
           <p className="text-xs sm:text-sm text-stone-400 mt-2 leading-relaxed">
-            Abadikan momen seru acara ini dengan kamera analog! Setiap tamu mendapat jatah <strong className="text-stone-200">20 foto</strong> yang tersimpan rahasia sampai pesta reveal.
+            Capture authentic event moments with vintage analog filters! Each guest receives a roll of <strong className="text-stone-200">20 exposures</strong> locked in secret until the party reveal.
           </p>
         </div>
 
@@ -115,14 +115,14 @@ export default function GuestLandingPage({ params }: GuestLandingProps) {
               htmlFor="guestName"
               className="block text-xs font-semibold text-stone-300 uppercase tracking-wider mb-2"
             >
-              Nama atau Panggilan Kamu
+              Your Name or Nickname
             </label>
             <input
               id="guestName"
               type="text"
               required
               maxLength={40}
-              placeholder="Contoh: Alex atau Maya"
+              placeholder="e.g. Alex or Maya"
               value={guestName}
               onChange={(e) => setGuestName(e.target.value)}
               disabled={submitting}
@@ -138,17 +138,17 @@ export default function GuestLandingPage({ params }: GuestLandingProps) {
             {submitting ? (
               <>
                 <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                <span>Menyiapkan Kamera...</span>
+                <span>Preparing Film...</span>
               </>
             ) : (
-              <span>Ambil Kamera 📷</span>
+              <span>Grab Your Camera 📷</span>
             )}
           </button>
         </form>
 
         <div className="mt-6 pt-4 border-t border-[#2e202c] text-center">
           <span className="text-[11px] text-stone-500 block">
-            Roll film digital • 4:3 Vintage Lens • 20 foto per orang
+            Digital Film Roll • 3:4 Portrait Vintage • 20 Exposures / Guest
           </span>
         </div>
       </div>

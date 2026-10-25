@@ -38,7 +38,7 @@ export async function POST(req: NextRequest) {
 
     if (currentCount >= MAX_PHOTOS_PER_GUEST) {
       return NextResponse.json(
-        { error: `Batas maksimal ${MAX_PHOTOS_PER_GUEST} foto per orang sudah tercapai!` },
+        { error: `Maximum limit of ${MAX_PHOTOS_PER_GUEST} photos per guest reached!` },
         { status: 403 }
       );
     }

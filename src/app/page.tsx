@@ -35,7 +35,7 @@ export default function Home() {
         </h1>
 
         <p className="mt-5 text-stone-400 text-sm sm:text-base max-w-lg mx-auto leading-relaxed">
-          Tamu cukup scan QR acara untuk mendapatkan roll kamera 20 foto dengan filter analog 4:3. Semua hasil foto dirahasiakan di brankas digital hingga momen pesta reveal!
+          Guests scan the event QR code to receive a 20-photo roll with authentic 3:4 portrait analog film filters. Every shot is locked in secret inside the digital vault until the party reveal!
         </p>
 
         <div className="mt-8 flex flex-col sm:flex-row items-center justify-center gap-4">
@@ -43,7 +43,7 @@ export default function Home() {
             href="/dashboard"
             className="w-full sm:w-auto px-8 py-3.5 bg-[#461a3d] hover:bg-[#59214e] text-white font-bold rounded-2xl shadow-lg transition-transform active:scale-95 text-sm flex items-center justify-center space-x-2 border border-[#6b285d]"
           >
-            <span>Buka Organizer Dashboard</span>
+            <span>Launch Organizer Dashboard</span>
             <span>✨</span>
           </Link>
         </div>
@@ -51,21 +51,21 @@ export default function Home() {
         {/* Feature Grid */}
         <div className="mt-14 grid grid-cols-1 sm:grid-cols-3 gap-4 text-left text-xs">
           <div className="p-4 bg-[#1c161d] border border-[#352533] rounded-2xl">
-            <div className="text-[#d8a4cb] font-bold text-sm mb-1">01. Tanpa Aplikasi</div>
+            <div className="text-[#d8a4cb] font-bold text-sm mb-1">01. Zero App Install</div>
             <p className="text-stone-400 leading-relaxed">
-              Langsung terbuka di browser Safari & Chrome tanpa perlu download apapun.
+              Opens instantly in mobile Safari & Chrome with seamless 1-click guest sessions.
             </p>
           </div>
           <div className="p-4 bg-[#1c161d] border border-[#352533] rounded-2xl">
-            <div className="text-[#d8a4cb] font-bold text-sm mb-1">02. 4:3 Analog Frame</div>
+            <div className="text-[#d8a4cb] font-bold text-sm mb-1">02. 3:4 Portrait Film</div>
             <p className="text-stone-400 leading-relaxed">
-              Preset warna Moody Plum, Classic 35mm, dan B&W Noir yang langsung dipanggang ke foto.
+              Authentic vintage presets: Moody Plum, Kodak Gold, Portra, and CineStill baked directly into photos.
             </p>
           </div>
           <div className="p-4 bg-[#1c161d] border border-[#352533] rounded-2xl">
             <div className="text-[#d8a4cb] font-bold text-sm mb-1">03. The Vault</div>
             <p className="text-stone-400 leading-relaxed">
-              Foto terkunci aman di Cloudflare R2 hingga waktu reveal yang ditentukan tiba.
+              Photos stay locked in Cloudflare R2 until your scheduled event reveal time.
             </p>
           </div>
         </div>
@@ -73,7 +73,7 @@ export default function Home() {
 
       {/* Footer */}
       <footer className="text-center text-xs text-stone-500 z-10 max-w-5xl w-full mx-auto">
-        Next.js 16 • Cloudflare R2 • Supabase PostgreSQL • Prisma ORM
+        Next.js 16 • Cloudflare R2 Storage • Supabase PostgreSQL • Prisma ORM
       </footer>
     </div>
   );

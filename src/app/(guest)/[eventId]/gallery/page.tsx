@@ -102,7 +102,7 @@ export default function GalleryPage({ params }: GalleryPageProps) {
       <div className="min-h-screen bg-[#131114] text-stone-100 flex items-center justify-center p-4 font-sans">
         <div className="text-center">
           <div className="w-8 h-8 border-3 border-[#9b4288] border-t-transparent rounded-full animate-spin mx-auto mb-3" />
-          <p className="text-xs text-stone-400 font-medium">Membuka Album...</p>
+          <p className="text-xs text-stone-400 font-medium">Opening Album Vault...</p>
         </div>
       </div>
     );
@@ -118,8 +118,8 @@ export default function GalleryPage({ params }: GalleryPageProps) {
           </h1>
           <p className="text-xs text-stone-400">
             {isRevealed
-              ? `${photos.length} Foto Terbuka`
-              : `${totalPhotos} Foto Tersimpan di Album`}
+              ? `${photos.length} Photos Revealed`
+              : `${totalPhotos} Photos Locked in Vault`}
           </p>
         </div>
 
@@ -128,7 +128,7 @@ export default function GalleryPage({ params }: GalleryPageProps) {
           className="px-3.5 py-1.5 bg-[#461a3d] hover:bg-[#59214e] text-white text-xs font-semibold rounded-xl border border-[#6b285d] transition-all flex items-center space-x-1.5 shadow"
         >
           <span>📷</span>
-          <span>Buka Kamera</span>
+          <span>Open Camera</span>
         </Link>
       </header>
 
@@ -142,13 +142,13 @@ export default function GalleryPage({ params }: GalleryPageProps) {
             </div>
 
             <h2 className="text-xl sm:text-2xl font-bold text-white mb-2">
-              Album Masih Dirahasiakan
+              Album Is Locked
             </h2>
             <p className="max-w-md text-stone-400 text-xs sm:text-sm mb-8 leading-relaxed">
-              Semua foto yang diambil para tamu sedang disimpan rapi di dalam roll. Foto-foto ini akan terbuka secara serentak pada:
+              Every photo snapped by guests is developing secretly inside the event vault. All photos will be revealed together on:
               <br />
               <strong className="text-stone-200 font-semibold block mt-1">
-                {revealDate?.toLocaleString("id-ID", {
+                {revealDate?.toLocaleString(undefined, {
                   dateStyle: "full",
                   timeStyle: "short",
                 })}
@@ -158,10 +158,10 @@ export default function GalleryPage({ params }: GalleryPageProps) {
             {/* Countdown Grid */}
             <div className="grid grid-cols-4 gap-2.5 sm:gap-4 max-w-sm w-full mb-8 font-sans">
               {[
-                { label: "HARI", value: timeLeft.days },
-                { label: "JAM", value: timeLeft.hours },
-                { label: "MENIT", value: timeLeft.minutes },
-                { label: "DETIK", value: timeLeft.seconds },
+                { label: "DAYS", value: timeLeft.days },
+                { label: "HOURS", value: timeLeft.hours },
+                { label: "MINS", value: timeLeft.minutes },
+                { label: "SECS", value: timeLeft.seconds },
               ].map((item, idx) => (
                 <div
                   key={idx}
@@ -181,7 +181,7 @@ export default function GalleryPage({ params }: GalleryPageProps) {
             <div className="inline-flex items-center space-x-2 px-4 py-2 bg-[#1c161d] rounded-full border border-[#352533] text-xs text-stone-300">
               <span className="w-2 h-2 rounded-full bg-[#d8a4cb]" />
               <span>
-                Sudah ada <strong className="text-white font-bold">{totalPhotos}</strong> foto terkumpul sejauh ini
+                <strong className="text-white font-bold">{totalPhotos}</strong> analog photos stored safely so far
               </span>
             </div>
           </div>
@@ -191,17 +191,17 @@ export default function GalleryPage({ params }: GalleryPageProps) {
             <div className="mb-6 flex items-center justify-between">
               <div>
                 <span className="text-xs uppercase tracking-wider text-[#d8a4cb] font-bold">
-                  ✨ Album Telah Dibuka
+                  ✨ The Vault Is Open!
                 </span>
                 <h2 className="text-xl sm:text-2xl font-bold text-white">
-                  Momen Bersama
+                  Shared Moments
                 </h2>
               </div>
             </div>
 
             {photos.length === 0 ? (
               <div className="text-center py-20 text-stone-500 text-sm">
-                Belum ada foto yang tersimpan dalam acara ini.
+                No photos have been captured yet for this event.
               </div>
             ) : (
               <div className="columns-1 sm:columns-2 md:columns-3 gap-4 space-y-4">
@@ -214,7 +214,7 @@ export default function GalleryPage({ params }: GalleryPageProps) {
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
                       src={photo.imageUrl}
-                      alt={`Foto oleh ${photo.guest.name}`}
+                      alt={`Photo by ${photo.guest.name}`}
                       loading="lazy"
                       className="w-full h-auto object-cover group-hover:scale-[1.01] transition-transform duration-300"
                     />
@@ -247,11 +247,11 @@ export default function GalleryPage({ params }: GalleryPageProps) {
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={selectedPhoto.imageUrl}
-              alt="Foto resolusi penuh"
+              alt="Full resolution capture"
               className="max-h-[80vh] w-auto rounded-2xl shadow-2xl object-contain border border-[#482243]"
             />
             <div className="mt-3 text-xs text-stone-200 flex items-center space-x-4">
-              <span>Dipotret oleh: <strong className="text-white">{selectedPhoto.guest.name}</strong></span>
+              <span>Captured by: <strong className="text-white">{selectedPhoto.guest.name}</strong></span>
               <a
                 href={selectedPhoto.imageUrl}
                 target="_blank"
@@ -260,7 +260,7 @@ export default function GalleryPage({ params }: GalleryPageProps) {
                 onClick={(e) => e.stopPropagation()}
                 className="text-[#d8a4cb] hover:text-white underline font-medium"
               >
-                Unduh Foto Asli ↗
+                Download Original ↗
               </a>
             </div>
           </div>

@@ -21,8 +21,6 @@ interface GuestPhotoItem {
   createdAt: string;
 }
 
-const MAX_PHOTOS_LIMIT = 20;
-
 export default function CameraPage({ params }: CameraPageProps) {
   const { eventId } = use(params);
 
@@ -35,6 +33,10 @@ export default function CameraPage({ params }: CameraPageProps) {
   const [isProcessing, setIsProcessing] = useState(false);
   const [statusMessage, setStatusMessage] = useState("");
   const [flashActive, setFlashActive] = useState(false);
+
+  // Dynamic Camera Theme Color & Photo Capacity
+  const [themeColor, setThemeColor] = useState<string>("#461a3d");
+  const [maxPhotosLimit, setMaxPhotosLimit] = useState<number>(20);
 
   // Flash toggle: "off" | "on"
   const [flashMode, setFlashMode] = useState<"off" | "on">("off");
@@ -79,6 +81,8 @@ export default function CameraPage({ params }: CameraPageProps) {
       .then((data) => {
         if (!mounted) return;
         if (data.event?.name) setEventName(data.event.name);
+        if (data.event?.themeColor) setThemeColor(data.event.themeColor);
+        if (data.event?.maxPhotosPerGuest) setMaxPhotosLimit(data.event.maxPhotosPerGuest);
         if (data.currentGuest?.photoCount !== undefined) {
           setPhotosTaken(data.currentGuest.photoCount);
         }
@@ -90,6 +94,7 @@ export default function CameraPage({ params }: CameraPageProps) {
       .then((res) => res.json())
       .then((data) => {
         if (!mounted) return;
+        if (data.maxPhotos) setMaxPhotosLimit(data.maxPhotos);
         if (data.photos && data.photos.length > 0) {
           setMyPhotos(data.photos);
           setLastPreview(data.photos[0].imageUrl);
@@ -198,8 +203,8 @@ export default function CameraPage({ params }: CameraPageProps) {
     setFlashMode((prev) => (prev === "off" ? "on" : "off"));
   };
 
-  const isLimitReached = photosTaken >= MAX_PHOTOS_LIMIT;
-  const remainingShots = Math.max(0, MAX_PHOTOS_LIMIT - photosTaken);
+  const isLimitReached = photosTaken >= maxPhotosLimit;
+  const remainingShots = Math.max(0, maxPhotosLimit - photosTaken);
 
   // Trigger Flash (Hardware Torch burst + Screen Xenon flash pulse)
   const triggerFlashBurst = async () => {
@@ -281,10 +286,10 @@ export default function CameraPage({ params }: CameraPageProps) {
         })
         .catch(() => {});
 
-      if (newCount >= MAX_PHOTOS_LIMIT) {
-        setBannerText("Roll completed! You used all 20 exposures.");
+      if (newCount >= maxPhotosLimit) {
+        setBannerText(`Roll completed! You used all ${maxPhotosLimit} exposures.`);
       } else {
-        setBannerText(`Photo locked in vault! (${MAX_PHOTOS_LIMIT - newCount} left)`);
+        setBannerText(`Photo locked in vault! (${maxPhotosLimit - newCount} left)`);
       }
       setTimeout(() => setBannerText(null), 3500);
     } catch (err: unknown) {
@@ -323,10 +328,10 @@ export default function CameraPage({ params }: CameraPageProps) {
         })
         .catch(() => {});
 
-      if (newCount >= MAX_PHOTOS_LIMIT) {
-        setBannerText("Roll completed! You used all 20 exposures.");
+      if (newCount >= maxPhotosLimit) {
+        setBannerText(`Roll completed! You used all ${maxPhotosLimit} exposures.`);
       } else {
-        setBannerText(`Photo locked in vault! (${MAX_PHOTOS_LIMIT - newCount} left)`);
+        setBannerText(`Photo locked in vault! (${maxPhotosLimit - newCount} left)`);
       }
       setTimeout(() => setBannerText(null), 3500);
     } catch (err: unknown) {
@@ -446,23 +451,29 @@ export default function CameraPage({ params }: CameraPageProps) {
             <span className="text-sm font-bold text-stone-100 font-mono tabular-nums">
               {remainingShots}
             </span>
-            <span className="text-[10px] text-stone-500 font-mono">/ 20</span>
+            <span className="text-[10px] text-stone-500 font-mono">/ {maxPhotosLimit}</span>
           </div>
         </div>
       </header>
 
-      {/* Tactile Plum Camera Body (#461a3d) */}
-      <main className="w-full max-w-sm my-auto bg-[#461a3d] rounded-[28px] p-3.5 border border-[#5d2351] shadow-2xl flex flex-col items-center relative">
+      {/* Tactile Camera Body with Client Custom Hex Theme */}
+      <main
+        className="w-full max-w-sm my-auto rounded-[28px] p-3.5 border shadow-2xl flex flex-col items-center relative transition-colors duration-300"
+        style={{
+          backgroundColor: themeColor,
+          borderColor: "rgba(255, 255, 255, 0.18)",
+        }}
+      >
         {/* Subtle camera chassis details */}
         <div className="w-full flex items-center justify-between mb-2 px-1">
           <div className="flex items-center space-x-1.5">
-            <span className="w-2 h-2 rounded-full bg-[#7a2e6b]" />
-            <span className="text-[10px] font-bold tracking-widest text-[#d8a4cb] uppercase">
+            <span className="w-2 h-2 rounded-full bg-white/40" />
+            <span className="text-[10px] font-bold tracking-widest text-white/80 uppercase">
               3:4 Portrait Lens
             </span>
           </div>
-          <span className="text-[10px] text-[#e0b7d6]/80 font-medium">
-            20 Exposures / Guest
+          <span className="text-[10px] text-white/70 font-medium">
+            {maxPhotosLimit} Exposures / Guest
           </span>
         </div>
 
@@ -546,17 +557,17 @@ export default function CameraPage({ params }: CameraPageProps) {
             </div>
           )}
 
-          {/* Limit Reached (20 Photos Done) Overlay */}
+          {/* Limit Reached (Max Photos Done) Overlay */}
           {isLimitReached && (
             <div className="absolute inset-0 bg-[#2b0f25]/95 backdrop-blur-sm flex flex-col items-center justify-center p-5 text-center z-30">
               <span className="text-3xl mb-2">🎞️</span>
               <p className="text-sm font-bold text-white mb-1">Film Roll Completed</p>
               <p className="text-xs text-stone-300 max-w-[220px] mb-3">
-                You used all 20 exposures. Review or delete shots below to free up space!
+                You used all {maxPhotosLimit} exposures. Review or delete shots below to free up space!
               </p>
               <button
                 onClick={handleOpenMyPhotos}
-                className="px-4 py-2 bg-white text-[#461a3d] font-bold text-xs rounded-xl shadow hover:bg-stone-100"
+                className="px-4 py-2 bg-white text-stone-900 font-bold text-xs rounded-xl shadow hover:bg-stone-100"
               >
                 Review & Manage My Shots →
               </button>
@@ -602,10 +613,10 @@ export default function CameraPage({ params }: CameraPageProps) {
         <div className="w-full mt-3.5 pt-2.5 border-t border-[#5d2351] flex items-center justify-between px-2">
           {/* Used Counter */}
           <div className="text-center w-16">
-            <span className="text-[10px] text-[#d8a4cb] uppercase tracking-wider block font-medium">
+            <span className="text-[10px] text-white/70 uppercase tracking-wider block font-medium">
               USED
             </span>
-            <span className="text-xs font-bold text-white font-mono">{photosTaken}/20</span>
+            <span className="text-xs font-bold text-white font-mono">{photosTaken}/{maxPhotosLimit}</span>
           </div>
 
           {/* Physical Shutter Button */}
@@ -698,7 +709,7 @@ export default function CameraPage({ params }: CameraPageProps) {
               <div>
                 <h2 className="text-base font-bold text-white">Your Captured Shots</h2>
                 <p className="text-xs text-stone-400">
-                  {photosTaken}/20 shots used • Delete unwanted shots to free roll space
+                  {photosTaken}/{maxPhotosLimit} shots used • Delete unwanted shots to free roll space
                 </p>
               </div>
               <button

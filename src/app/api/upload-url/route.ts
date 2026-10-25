@@ -21,14 +21,18 @@ export async function POST(req: NextRequest) {
 
     const guest = await prisma.guest.findUnique({
       where: { sessionToken },
+      include: {
+        event: {
+          select: { maxPhotosPerGuest: true },
+        },
+      },
     });
 
     if (!guest || guest.eventId !== eventId) {
       return NextResponse.json({ error: "Invalid guest session" }, { status: 403 });
     }
 
-    // Enforce 20 photos per guest limit
-    const MAX_PHOTOS_PER_GUEST = 20;
+    const maxPhotos = guest.event?.maxPhotosPerGuest || 20;
     const currentCount = await prisma.photo.count({
       where: {
         guestId: guest.id,
@@ -36,9 +40,9 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    if (currentCount >= MAX_PHOTOS_PER_GUEST) {
+    if (currentCount >= maxPhotos) {
       return NextResponse.json(
-        { error: `Maximum limit of ${MAX_PHOTOS_PER_GUEST} photos per guest reached!` },
+        { error: `Maximum limit of ${maxPhotos} photos per guest reached!` },
         { status: 403 }
       );
     }

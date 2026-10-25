@@ -23,6 +23,19 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Event not found" }, { status: 404 });
     }
 
+    // Enforce max guests capacity limit if set
+    if (event.maxGuests) {
+      const currentGuestCount = await prisma.guest.count({
+        where: { eventId },
+      });
+      if (currentGuestCount >= event.maxGuests) {
+        return NextResponse.json(
+          { error: `Guest capacity reached for this event (maximum ${event.maxGuests} guests). Please contact the organizer.` },
+          { status: 403 }
+        );
+      }
+    }
+
     // Create session token and guest record
     const sessionToken = crypto.randomUUID();
     const guest = await prisma.guest.create({

@@ -12,6 +12,8 @@ export default function GuestLandingPage({ params }: GuestLandingProps) {
   const router = useRouter();
 
   const [eventName, setEventName] = useState<string>("");
+  const [themeColor, setThemeColor] = useState<string>("#461a3d");
+  const [maxPhotos, setMaxPhotos] = useState<number>(20);
   const [guestName, setGuestName] = useState<string>("");
   const [loading, setLoading] = useState<boolean>(true);
   const [submitting, setSubmitting] = useState<boolean>(false);
@@ -28,6 +30,8 @@ export default function GuestLandingPage({ params }: GuestLandingProps) {
         }
         const data = await res.json();
         setEventName(data.event?.name || "Mingle Session");
+        if (data.event?.themeColor) setThemeColor(data.event.themeColor);
+        if (data.event?.maxPhotosPerGuest) setMaxPhotos(data.event.maxPhotosPerGuest);
 
         // If guest session already exists, forward to camera
         if (data.currentGuest) {
@@ -99,7 +103,7 @@ export default function GuestLandingPage({ params }: GuestLandingProps) {
             {eventName || "Mingle Session"}
           </h1>
           <p className="text-xs sm:text-sm text-stone-400 mt-2 leading-relaxed">
-            Capture authentic event moments with vintage analog filters! Each guest receives a roll of <strong className="text-stone-200">20 exposures</strong> locked in secret until the party reveal.
+            Capture authentic event moments with vintage analog filters! Each guest receives a roll of <strong className="text-stone-200">{maxPhotos} exposures</strong> locked in secret until the party reveal.
           </p>
         </div>
 
@@ -126,14 +130,15 @@ export default function GuestLandingPage({ params }: GuestLandingProps) {
               value={guestName}
               onChange={(e) => setGuestName(e.target.value)}
               disabled={submitting}
-              className="w-full px-4 py-3 bg-[#140e14] border border-[#3e2b3c] rounded-xl text-stone-100 placeholder-stone-500 focus:outline-none focus:ring-2 focus:ring-[#9b4288] font-medium text-sm transition-all"
+              className="w-full px-4 py-3 bg-[#140e14] border border-[#3e2b3c] rounded-xl text-stone-100 placeholder-stone-500 focus:outline-none focus:ring-2 focus:ring-white/20 font-medium text-sm transition-all"
             />
           </div>
 
           <button
             type="submit"
             disabled={submitting || !guestName.trim()}
-            className="w-full py-3.5 bg-[#461a3d] hover:bg-[#59214e] text-white font-bold rounded-xl shadow transition-transform active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed text-sm flex items-center justify-center space-x-2 border border-[#6b285d]"
+            style={{ backgroundColor: themeColor }}
+            className="w-full py-3.5 hover:brightness-110 text-white font-bold rounded-xl shadow transition-transform active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed text-sm flex items-center justify-center space-x-2 border border-white/20"
           >
             {submitting ? (
               <>

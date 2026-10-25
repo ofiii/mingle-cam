@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
-// GET /api/events - List all events
+// GET /api/events - List all events with counts and customization settings
 export async function GET() {
   try {
     const events = await prisma.event.findMany({
@@ -23,10 +23,10 @@ export async function GET() {
   }
 }
 
-// POST /api/events - Create a new event
+// POST /api/events - Create a new event with custom settings
 export async function POST(req: NextRequest) {
   try {
-    const { name, revealDate } = await req.json();
+    const { name, revealDate, maxGuests, maxPhotosPerGuest, themeColor } = await req.json();
 
     if (!name || !revealDate) {
       return NextResponse.json(
@@ -35,10 +35,23 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // Parse customizations with safe defaults
+    const parsedMaxGuests = maxGuests !== undefined && maxGuests !== null && maxGuests !== ""
+      ? Number(maxGuests)
+      : null; // null represents Unlimited
+
+    const parsedMaxPhotos = maxPhotosPerGuest ? Math.max(1, Math.min(100, Number(maxPhotosPerGuest))) : 20;
+    const parsedThemeColor = (themeColor && /^#[0-9A-Fa-f]{6}$/.test(themeColor.trim()))
+      ? themeColor.trim()
+      : "#461a3d";
+
     const event = await prisma.event.create({
       data: {
         name: name.trim(),
         revealDate: new Date(revealDate),
+        maxGuests: parsedMaxGuests,
+        maxPhotosPerGuest: parsedMaxPhotos,
+        themeColor: parsedThemeColor,
       },
     });
 

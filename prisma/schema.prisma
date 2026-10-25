@@ -9,13 +9,16 @@ datasource db {
 }
 
 model Event {
-  id          String   @id @default(uuid())
-  name        String
-  revealDate  DateTime
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  guests      Guest[]
-  photos      Photo[]
+  id                 String   @id @default(uuid())
+  name               String
+  revealDate         DateTime
+  maxGuests          Int?     @default(100)
+  maxPhotosPerGuest  Int      @default(20)
+  themeColor         String   @default("#461a3d")
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  guests             Guest[]
+  photos             Photo[]
 
   @@index([revealDate])
 }

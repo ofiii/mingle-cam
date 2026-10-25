@@ -20,11 +20,18 @@ export async function GET(req: NextRequest) {
 
     const guest = await prisma.guest.findUnique({
       where: { sessionToken },
+      include: {
+        event: {
+          select: { maxPhotosPerGuest: true },
+        },
+      },
     });
 
     if (!guest || guest.eventId !== eventId) {
       return NextResponse.json({ error: "Invalid session" }, { status: 403 });
     }
+
+    const maxPhotos = guest.event?.maxPhotosPerGuest || 20;
 
     const photos = await prisma.photo.findMany({
       where: {
@@ -46,7 +53,8 @@ export async function GET(req: NextRequest) {
         imageUrl: `/api/photos/view?key=${encodeURIComponent(p.s3ObjectKey)}`,
       })),
       photoCount: photos.length,
-      remainingPhotos: Math.max(0, 20 - photos.length),
+      maxPhotos,
+      remainingPhotos: Math.max(0, maxPhotos - photos.length),
     });
   } catch (error) {
     console.error("[GET_GUEST_PHOTOS_ERROR]", error);
@@ -70,19 +78,26 @@ export async function POST(req: NextRequest) {
 
     const guest = await prisma.guest.findUnique({
       where: { sessionToken },
+      include: {
+        event: {
+          select: { maxPhotosPerGuest: true },
+        },
+      },
     });
 
     if (!guest || guest.eventId !== eventId) {
       return NextResponse.json({ error: "Invalid session" }, { status: 403 });
     }
 
+    const maxPhotos = guest.event?.maxPhotosPerGuest || 20;
+
     const currentCount = await prisma.photo.count({
       where: { guestId: guest.id, eventId },
     });
 
-    if (currentCount >= 20) {
+    if (currentCount >= maxPhotos) {
       return NextResponse.json(
-        { error: "Limit of 20 photos per guest reached!" },
+        { error: `Limit of ${maxPhotos} photos per guest reached!` },
         { status: 403 }
       );
     }
@@ -122,11 +137,18 @@ export async function DELETE(req: NextRequest) {
 
     const guest = await prisma.guest.findUnique({
       where: { sessionToken },
+      include: {
+        event: {
+          select: { maxPhotosPerGuest: true },
+        },
+      },
     });
 
     if (!guest || guest.eventId !== eventId) {
       return NextResponse.json({ error: "Invalid session" }, { status: 403 });
     }
+
+    const maxPhotos = guest.event?.maxPhotosPerGuest || 20;
 
     // Verify ownership of the photo
     const photo = await prisma.photo.findUnique({
@@ -163,7 +185,8 @@ export async function DELETE(req: NextRequest) {
     return NextResponse.json({
       success: true,
       photoCount: newCount,
-      remainingPhotos: Math.max(0, 20 - newCount),
+      maxPhotos,
+      remainingPhotos: Math.max(0, maxPhotos - newCount),
     });
   } catch (error) {
     console.error("[DELETE_PHOTO_ERROR]", error);

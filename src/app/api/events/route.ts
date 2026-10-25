@@ -16,7 +16,10 @@ export async function GET() {
     return NextResponse.json({ events });
   } catch (error) {
     console.error("[GET_EVENTS_ERROR]", error);
-    return NextResponse.json({ error: "Failed to fetch events" }, { status: 500 });
+    return NextResponse.json(
+      { error: (error as Error).message || "Failed to fetch events" },
+      { status: 500 }
+    );
   }
 }
 
@@ -42,6 +45,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ success: true, event });
   } catch (error) {
     console.error("[CREATE_EVENT_ERROR]", error);
-    return NextResponse.json({ error: "Failed to create event" }, { status: 500 });
+    return NextResponse.json(
+      { error: (error as Error).message || "Failed to create event" },
+      { status: 500 }
+    );
   }
 }

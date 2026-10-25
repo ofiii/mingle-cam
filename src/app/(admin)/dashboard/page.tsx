@@ -51,7 +51,10 @@ export default function AdminDashboardPage() {
         body: JSON.stringify({ name: name.trim(), revealDate }),
       });
 
-      if (!res.ok) throw new Error("Failed to create event");
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.error || "Failed to create event");
+      }
       setName("");
       setRevealDate("");
       setActionMessage("Event created successfully!");

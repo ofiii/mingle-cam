@@ -88,26 +88,22 @@ export default function GuestLandingPage({ params }: GuestLandingProps) {
   }
 
   return (
-    <div className="min-h-screen bg-stone-950 text-stone-100 flex flex-col items-center justify-center p-6 relative overflow-hidden font-sans">
-      {/* Vintage film roll graphic accent */}
-      <div className="absolute top-0 left-0 right-0 h-4 bg-repeat-x flex justify-between px-2 opacity-30 select-none pointer-events-none">
-        {Array.from({ length: 16 }).map((_, i) => (
-          <div key={i} className="w-4 h-3 bg-stone-800 rounded-sm" />
-        ))}
-      </div>
+    <div className="min-h-screen bg-[#110510] text-fuchsia-50 flex flex-col items-center justify-center p-6 relative overflow-hidden font-sans">
+      {/* Background glow */}
+      <div className="absolute w-96 h-96 bg-[#461a3d]/40 rounded-full blur-3xl pointer-events-none" />
 
-      <div className="w-full max-w-md bg-stone-900 border border-stone-800 rounded-2xl p-6 sm:p-8 shadow-2xl relative z-10">
+      <div className="w-full max-w-md bg-[#1e071c] border border-[#48153f] rounded-3xl p-6 sm:p-8 shadow-2xl relative z-10">
         <div className="text-center mb-6">
-          <div className="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-400 font-mono text-xs font-semibold mb-3">
+          <div className="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-[#461a3d]/50 border border-fuchsia-500/30 text-fuchsia-300 font-mono text-xs font-semibold mb-3">
             <span>📸</span>
-            <span>Mingle Disposable 35mm</span>
+            <span>Mingle 4:3 Analog Camera</span>
           </div>
 
-          <h1 className="text-2xl sm:text-3xl font-extrabold text-stone-100 tracking-tight">
+          <h1 className="text-2xl sm:text-3xl font-extrabold text-fuchsia-100 tracking-tight">
             {eventName || "Mingle Session"}
           </h1>
-          <p className="text-xs sm:text-sm text-stone-400 mt-2 font-mono">
-            Every photo you snap is filtered like vintage analog film and hidden in the album vault until the grand reveal!
+          <p className="text-xs sm:text-sm text-fuchsia-300/80 mt-2 font-mono">
+            Every photo you snap is filtered with vintage analog effects and hidden in the album vault until the grand reveal!
           </p>
         </div>
 
@@ -121,7 +117,7 @@ export default function GuestLandingPage({ params }: GuestLandingProps) {
           <div>
             <label
               htmlFor="guestName"
-              className="block text-xs font-mono font-medium text-stone-300 uppercase tracking-wider mb-2"
+              className="block text-xs font-mono font-medium text-fuchsia-300 uppercase tracking-wider mb-2"
             >
               Enter Your Name / Nickname
             </label>
@@ -134,14 +130,14 @@ export default function GuestLandingPage({ params }: GuestLandingProps) {
               value={guestName}
               onChange={(e) => setGuestName(e.target.value)}
               disabled={submitting}
-              className="w-full px-4 py-3 bg-stone-950 border border-stone-700 rounded-xl text-stone-100 placeholder-stone-600 focus:outline-none focus:ring-2 focus:ring-amber-500 font-medium text-sm transition-all"
+              className="w-full px-4 py-3 bg-[#130412] border border-[#521747] rounded-xl text-fuchsia-100 placeholder-fuchsia-700/60 focus:outline-none focus:ring-2 focus:ring-fuchsia-500 font-medium text-sm transition-all"
             />
           </div>
 
           <button
             type="submit"
             disabled={submitting || !guestName.trim()}
-            className="w-full py-3.5 bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 text-stone-950 font-bold rounded-xl shadow-lg transition-transform active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed font-mono uppercase tracking-wider text-sm flex items-center justify-center space-x-2"
+            className="w-full py-3.5 bg-gradient-to-r from-[#7a2265] to-[#a82d8c] hover:brightness-110 text-fuchsia-50 font-bold rounded-xl shadow-lg transition-transform active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed font-mono uppercase tracking-wider text-sm flex items-center justify-center space-x-2 border border-fuchsia-400/30"
           >
             {submitting ? (
               <>

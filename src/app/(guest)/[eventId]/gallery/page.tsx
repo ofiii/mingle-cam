@@ -56,7 +56,6 @@ export default function GalleryPage({ params }: GalleryPageProps) {
 
   useEffect(() => {
     fetchEventData();
-    // Poll status periodically (every 10s)
     const interval = setInterval(fetchEventData, 10000);
     return () => clearInterval(interval);
   }, [eventId]);
@@ -87,31 +86,31 @@ export default function GalleryPage({ params }: GalleryPageProps) {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-stone-950 text-stone-100 flex items-center justify-center p-4">
-        <div className="text-center font-mono">
-          <div className="w-8 h-8 border-2 border-amber-500 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
-          <p className="text-xs text-stone-400">Opening Album Vault...</p>
+      <div className="min-h-screen bg-[#110510] text-fuchsia-100 flex items-center justify-center p-4 font-mono">
+        <div className="text-center">
+          <div className="w-8 h-8 border-2 border-fuchsia-500 border-t-transparent rounded-full animate-spin mx-auto mb-3 shadow-[0_0_12px_rgba(217,70,239,0.5)]" />
+          <p className="text-xs text-fuchsia-300">Opening Plum Vault...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-stone-950 text-stone-100 flex flex-col font-sans">
+    <div className="min-h-screen bg-[#110510] text-fuchsia-50 flex flex-col font-sans">
       {/* Header */}
-      <header className="sticky top-0 z-30 bg-stone-950/80 backdrop-blur-md border-b border-stone-800 px-4 py-3 flex items-center justify-between">
+      <header className="sticky top-0 z-30 bg-[#190717]/85 backdrop-blur-md border-b border-[#3b1234] px-4 py-3 flex items-center justify-between">
         <div>
-          <h1 className="text-sm font-bold text-stone-100 tracking-tight">
+          <h1 className="text-sm font-bold text-fuchsia-100 tracking-tight">
             {eventName}
           </h1>
-          <p className="text-[11px] font-mono text-stone-400">
+          <p className="text-[11px] font-mono text-fuchsia-400">
             {isRevealed ? `${photos.length} Revealed Moments` : `${totalPhotos} Photos Locked in Vault`}
           </p>
         </div>
 
         <Link
           href={`/${eventId}/camera`}
-          className="px-3 py-1.5 bg-amber-500 hover:bg-amber-400 text-stone-950 font-mono text-xs font-bold rounded-lg shadow transition-all flex items-center space-x-1"
+          className="px-3.5 py-1.5 bg-gradient-to-r from-[#7a2265] to-[#a82d8c] hover:brightness-110 text-fuchsia-100 font-mono text-xs font-bold rounded-lg shadow-lg border border-fuchsia-400/30 transition-all flex items-center space-x-1"
         >
           <span>📷</span>
           <span>Take Photos</span>
@@ -123,17 +122,17 @@ export default function GalleryPage({ params }: GalleryPageProps) {
         {!isRevealed ? (
           /* LOCKED VAULT VIEW WITH COUNTDOWN */
           <div className="flex flex-col items-center justify-center py-12 px-4 text-center">
-            <div className="w-20 h-20 rounded-full bg-stone-900 border-2 border-amber-500/40 flex items-center justify-center mb-6 shadow-[0_0_30px_rgba(245,158,11,0.2)]">
+            <div className="w-20 h-20 rounded-full bg-[#20081e] border-2 border-[#6f235d] flex items-center justify-center mb-6 shadow-[0_0_35px_rgba(111,35,93,0.5)]">
               <span className="text-3xl">🔒</span>
             </div>
 
-            <h2 className="text-2xl sm:text-3xl font-black text-stone-100 mb-2 font-mono">
+            <h2 className="text-2xl sm:text-3xl font-black text-fuchsia-100 mb-2 font-mono">
               ALBUM IS LOCKED
             </h2>
-            <p className="max-w-md text-stone-400 text-xs sm:text-sm font-mono mb-8">
+            <p className="max-w-md text-fuchsia-300/80 text-xs sm:text-sm font-mono mb-8">
               Photos taken during the mingle session are developing secretly in the vault. They will be revealed to everyone at:
               <br />
-              <strong className="text-amber-400 font-semibold">
+              <strong className="text-fuchsia-300 font-semibold">
                 {revealDate?.toLocaleString()}
               </strong>
             </p>
@@ -148,12 +147,12 @@ export default function GalleryPage({ params }: GalleryPageProps) {
               ].map((item, idx) => (
                 <div
                   key={idx}
-                  className="bg-stone-900 border border-stone-800 rounded-xl p-3 flex flex-col items-center justify-center shadow-inner"
+                  className="bg-[#1f071d] border border-[#48153f] rounded-xl p-3 flex flex-col items-center justify-center shadow-inner"
                 >
-                  <span className="text-2xl sm:text-3xl font-extrabold text-amber-400 tabular-nums">
+                  <span className="text-2xl sm:text-3xl font-extrabold text-fuchsia-200 tabular-nums">
                     {String(item.value).padStart(2, "0")}
                   </span>
-                  <span className="text-[10px] text-stone-500 tracking-wider">
+                  <span className="text-[10px] text-fuchsia-400 tracking-wider">
                     {item.label}
                   </span>
                 </div>
@@ -161,8 +160,8 @@ export default function GalleryPage({ params }: GalleryPageProps) {
             </div>
 
             {/* Vault Stats */}
-            <div className="inline-flex items-center space-x-2 px-4 py-2 bg-stone-900/80 rounded-full border border-stone-800 font-mono text-xs text-stone-300">
-              <span className="w-2 h-2 rounded-full bg-amber-500 animate-ping" />
+            <div className="inline-flex items-center space-x-2 px-4 py-2 bg-[#20081e] rounded-full border border-[#4f1645] font-mono text-xs text-fuchsia-200">
+              <span className="w-2 h-2 rounded-full bg-fuchsia-500 animate-ping" />
               <span>
                 <strong>{totalPhotos}</strong> analog photos stored safely so far
               </span>
@@ -173,17 +172,17 @@ export default function GalleryPage({ params }: GalleryPageProps) {
           <div>
             <div className="mb-6 flex items-center justify-between">
               <div>
-                <span className="text-xs uppercase font-mono tracking-wider text-amber-400 font-bold">
+                <span className="text-xs uppercase font-mono tracking-wider text-fuchsia-400 font-bold">
                   ✨ The Vault Is Open!
                 </span>
-                <h2 className="text-xl sm:text-2xl font-black text-stone-100">
+                <h2 className="text-xl sm:text-2xl font-black text-fuchsia-100">
                   Shared Moments
                 </h2>
               </div>
             </div>
 
             {photos.length === 0 ? (
-              <div className="text-center py-20 text-stone-500 font-mono text-sm">
+              <div className="text-center py-20 text-fuchsia-400/60 font-mono text-sm">
                 No photos were captured yet. Be the first to snap one!
               </div>
             ) : (
@@ -192,7 +191,7 @@ export default function GalleryPage({ params }: GalleryPageProps) {
                   <div
                     key={photo.id}
                     onClick={() => setSelectedPhoto(photo)}
-                    className="break-inside-avoid bg-stone-900 border border-stone-800 rounded-xl overflow-hidden cursor-pointer hover:border-amber-500/50 transition-all shadow-lg group relative"
+                    className="break-inside-avoid bg-[#1e071c] border border-[#44133b] rounded-2xl overflow-hidden cursor-pointer hover:border-fuchsia-400/60 transition-all shadow-xl group relative"
                   >
                     <img
                       src={photo.imageUrl}
@@ -200,11 +199,11 @@ export default function GalleryPage({ params }: GalleryPageProps) {
                       loading="lazy"
                       className="w-full h-auto object-cover group-hover:scale-102 transition-transform duration-300"
                     />
-                    <div className="p-3 flex items-center justify-between font-mono text-xs text-stone-400 bg-stone-900/90">
-                      <span className="font-bold text-stone-200 truncate">
+                    <div className="p-3 flex items-center justify-between font-mono text-xs text-fuchsia-300 bg-[#1a0518]/95 border-t border-[#3b1034]">
+                      <span className="font-bold text-fuchsia-100 truncate">
                         👤 {photo.guest.name}
                       </span>
-                      <span className="text-[10px] text-stone-500">
+                      <span className="text-[10px] text-fuchsia-400">
                         {new Date(photo.createdAt).toLocaleTimeString([], {
                           hour: "2-digit",
                           minute: "2-digit",
@@ -223,15 +222,15 @@ export default function GalleryPage({ params }: GalleryPageProps) {
       {selectedPhoto && (
         <div
           onClick={() => setSelectedPhoto(null)}
-          className="fixed inset-0 z-50 bg-black/90 backdrop-blur-md flex items-center justify-center p-4 cursor-zoom-out"
+          className="fixed inset-0 z-50 bg-black/95 backdrop-blur-md flex items-center justify-center p-4 cursor-zoom-out"
         >
           <div className="max-w-3xl max-h-[90vh] flex flex-col items-center">
             <img
               src={selectedPhoto.imageUrl}
               alt="Full resolution"
-              className="max-h-[80vh] w-auto rounded-lg shadow-2xl object-contain border border-stone-800"
+              className="max-h-[80vh] w-auto rounded-xl shadow-2xl object-contain border border-[#521747]"
             />
-            <div className="mt-3 font-mono text-xs text-stone-300 flex items-center space-x-4">
+            <div className="mt-3 font-mono text-xs text-fuchsia-200 flex items-center space-x-4">
               <span>Captured by: <strong>{selectedPhoto.guest.name}</strong></span>
               <a
                 href={selectedPhoto.imageUrl}
@@ -239,7 +238,7 @@ export default function GalleryPage({ params }: GalleryPageProps) {
                 rel="noreferrer"
                 download
                 onClick={(e) => e.stopPropagation()}
-                className="text-amber-400 hover:underline"
+                className="text-fuchsia-400 hover:text-fuchsia-200 underline"
               >
                 Download Original ↗
               </a>

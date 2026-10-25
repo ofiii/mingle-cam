@@ -1,3 +1,55 @@
+export type FilterEffect = "vintage" | "noir" | "plum" | "vibrant" | "soft";
+
+export interface EffectPreset {
+  id: FilterEffect;
+  name: string;
+  icon: string;
+  cssFilter: string;
+  grainAmount: number;
+}
+
+export const EFFECT_PRESETS: EffectPreset[] = [
+  {
+    id: "vintage",
+    name: "35mm Analog",
+    icon: "🎞️",
+    cssFilter: "contrast(115%) saturate(85%) sepia(25%) hue-rotate(-8deg)",
+    grainAmount: 14,
+  },
+  {
+    id: "noir",
+    name: "B&W Noir",
+    icon: "🖤",
+    cssFilter: "grayscale(100%) contrast(140%) brightness(95%)",
+    grainAmount: 18,
+  },
+  {
+    id: "plum",
+    name: "Plum Dream",
+    icon: "🍇",
+    cssFilter: "contrast(112%) saturate(120%) hue-rotate(275deg) brightness(102%)",
+    grainAmount: 12,
+  },
+  {
+    id: "vibrant",
+    name: "Cyber 90s",
+    icon: "✨",
+    cssFilter: "contrast(125%) saturate(135%) brightness(104%)",
+    grainAmount: 10,
+  },
+  {
+    id: "soft",
+    name: "Pastel Bloom",
+    icon: "🌸",
+    cssFilter: "contrast(98%) saturate(85%) brightness(108%)",
+    grainAmount: 8,
+  },
+];
+
+export function getEffectPreset(id: FilterEffect): EffectPreset {
+  return EFFECT_PRESETS.find((p) => p.id === id) || EFFECT_PRESETS[0];
+}
+
 export interface FilterResult {
   blob: Blob;
   previewUrl: string;
@@ -6,26 +58,94 @@ export interface FilterResult {
 }
 
 /**
- * Destructive Analog Filter Processor
- * Renders raw file onto an HTML5 Canvas, applies vintage color grading,
- * generates film grain, stamps vintage date, and returns a JPEG Blob.
+ * Capture a 4:3 frame directly from a live HTMLVideoElement and apply the chosen analog filter
+ */
+export async function captureVideoFrame(
+  video: HTMLVideoElement,
+  effect: FilterEffect = "vintage",
+  isFrontCamera: boolean = false
+): Promise<FilterResult> {
+  const videoWidth = video.videoWidth || 1280;
+  const videoHeight = video.videoHeight || 960;
+
+  // Compute 4:3 crop dimension
+  let targetWidth = videoWidth;
+  let targetHeight = Math.round((videoWidth * 3) / 4);
+
+  if (targetHeight > videoHeight) {
+    targetHeight = videoHeight;
+    targetWidth = Math.round((videoHeight * 4) / 3);
+  }
+
+  const sx = (videoWidth - targetWidth) / 2;
+  const sy = (videoHeight - targetHeight) / 2;
+
+  // Cap max dimension to 2048 to prevent memory spikes
+  const maxDim = 2048;
+  let outputWidth = targetWidth;
+  let outputHeight = targetHeight;
+  if (outputWidth > maxDim || outputHeight > maxDim) {
+    if (outputWidth > outputHeight) {
+      outputHeight = Math.round((outputHeight * maxDim) / outputWidth);
+      outputWidth = maxDim;
+    } else {
+      outputWidth = Math.round((outputWidth * maxDim) / outputHeight);
+      outputHeight = maxDim;
+    }
+  }
+
+  const canvas = document.createElement("canvas");
+  canvas.width = outputWidth;
+  canvas.height = outputHeight;
+  const ctx = canvas.getContext("2d", { willReadFrequently: true });
+
+  if (!ctx) {
+    throw new Error("Unable to obtain 2D canvas context");
+  }
+
+  const preset = getEffectPreset(effect);
+
+  ctx.save();
+  // Flip horizontally if front camera (mirror selfie mode)
+  if (isFrontCamera) {
+    ctx.translate(outputWidth, 0);
+    ctx.scale(-1, 1);
+  }
+
+  // Apply CSS color matrix filter
+  ctx.filter = preset.cssFilter;
+  ctx.drawImage(video, sx, sy, targetWidth, targetHeight, 0, 0, outputWidth, outputHeight);
+  ctx.restore();
+
+  // Apply analog film grain
+  applyFilmGrain(ctx, outputWidth, outputHeight, preset.grainAmount);
+
+  // Convert to high-quality JPEG Blob (No date stamp!)
+  const blob = await new Promise<Blob>((resolve, reject) => {
+    canvas.toBlob(
+      (b) => {
+        if (b) resolve(b);
+        else reject(new Error("Canvas export failed"));
+      },
+      "image/jpeg",
+      0.9
+    );
+  });
+
+  const previewUrl = URL.createObjectURL(blob);
+  return { blob, previewUrl, width: outputWidth, height: outputHeight };
+}
+
+/**
+ * Destructive Analog Filter Processor for raw Files (fallback mode)
  */
 export async function applyAnalogFilter(
   file: File,
-  options?: {
-    maxDimension?: number;
-    quality?: number;
-    customDate?: Date;
-  }
+  effect: FilterEffect = "vintage"
 ): Promise<FilterResult> {
-  const maxDimension = options?.maxDimension ?? 2048; // Prevent browser OOM on high-res mobile cameras
-  const quality = options?.quality ?? 0.88;
-  const targetDate = options?.customDate ?? new Date();
-
-  // 1. Decode image into ImageBitmap
+  const maxDimension = 2048;
   const imageBitmap = await createImageBitmap(file);
 
-  // 2. Downscale proportionally if needed
   let { width, height } = imageBitmap;
   if (width > maxDimension || height > maxDimension) {
     if (width > height) {
@@ -37,7 +157,6 @@ export async function applyAnalogFilter(
     }
   }
 
-  // 3. Create Canvas
   const canvas = document.createElement("canvas");
   canvas.width = width;
   canvas.height = height;
@@ -45,45 +164,28 @@ export async function applyAnalogFilter(
 
   if (!ctx) {
     imageBitmap.close();
-    throw new Error("Unable to obtain 2D canvas rendering context");
+    throw new Error("Unable to obtain 2D canvas context");
   }
 
-  // 4. Apply Analog Filter Pipeline
+  const preset = getEffectPreset(effect);
+
   ctx.save();
-  ctx.filter = "contrast(120%) saturate(80%) sepia(30%) hue-rotate(-10deg)";
+  ctx.filter = preset.cssFilter;
   ctx.drawImage(imageBitmap, 0, 0, width, height);
   ctx.restore();
   imageBitmap.close();
 
-  // 5. Apply subtle analog film grain (per-pixel noise overlay)
-  try {
-    const imageData = ctx.getImageData(0, 0, width, height);
-    const data = imageData.data;
-    const grainAmount = 14;
+  // Apply subtle grain
+  applyFilmGrain(ctx, width, height, preset.grainAmount);
 
-    for (let i = 0; i < data.length; i += 4) {
-      const noise = (Math.random() - 0.5) * grainAmount;
-      data[i] = Math.min(255, Math.max(0, data[i] + noise));
-      data[i + 1] = Math.min(255, Math.max(0, data[i + 1] + noise));
-      data[i + 2] = Math.min(255, Math.max(0, data[i + 2] + noise));
-    }
-    ctx.putImageData(imageData, 0, 0);
-  } catch {
-    // If getImageData has cross-origin or buffer restrictions, proceed with filtered canvas
-  }
-
-  // 6. Draw 90s Orange Digital Quartz Date Stamp (Format: 'YY MM DD)
-  drawVintageDateStamp(ctx, width, height, targetDate);
-
-  // 7. Convert Canvas to JPEG Blob
   const blob = await new Promise<Blob>((resolve, reject) => {
     canvas.toBlob(
       (b) => {
         if (b) resolve(b);
-        else reject(new Error("Canvas toBlob conversion failed"));
+        else reject(new Error("Canvas toBlob failed"));
       },
       "image/jpeg",
-      quality
+      0.9
     );
   });
 
@@ -92,37 +194,26 @@ export async function applyAnalogFilter(
 }
 
 /**
- * Draws vintage LED/LCD 7-segment style date stamp with an analog orange glow
+ * Apply per-pixel analog film grain noise
  */
-function drawVintageDateStamp(
+function applyFilmGrain(
   ctx: CanvasRenderingContext2D,
   width: number,
   height: number,
-  date: Date
+  amount: number
 ) {
-  const yy = String(date.getFullYear()).slice(-2);
-  const mm = String(date.getMonth() + 1).padStart(2, "0");
-  const dd = String(date.getDate()).padStart(2, "0");
-  const dateStr = `'${yy} ${mm} ${dd}`;
-
-  const fontSize = Math.max(22, Math.round(width * 0.034));
-  const paddingRight = Math.round(width * 0.045);
-  const paddingBottom = Math.round(height * 0.045);
-
-  ctx.save();
-  ctx.font = `700 ${fontSize}px "Courier New", monospace`;
-  ctx.textAlign = "right";
-  ctx.textBaseline = "bottom";
-
-  // Orange glow effect
-  ctx.shadowColor = "rgba(255, 110, 0, 0.8)";
-  ctx.shadowBlur = Math.round(fontSize * 0.35);
-  ctx.fillStyle = "#ff7a00";
-  ctx.fillText(dateStr, width - paddingRight, height - paddingBottom);
-
-  // Core brightness
-  ctx.shadowBlur = 0;
-  ctx.fillStyle = "#ffb042";
-  ctx.fillText(dateStr, width - paddingRight, height - paddingBottom);
-  ctx.restore();
+  if (amount <= 0) return;
+  try {
+    const imageData = ctx.getImageData(0, 0, width, height);
+    const data = imageData.data;
+    for (let i = 0; i < data.length; i += 4) {
+      const noise = (Math.random() - 0.5) * amount;
+      data[i] = Math.min(255, Math.max(0, data[i] + noise));
+      data[i + 1] = Math.min(255, Math.max(0, data[i + 1] + noise));
+      data[i + 2] = Math.min(255, Math.max(0, data[i + 2] + noise));
+    }
+    ctx.putImageData(imageData, 0, 0);
+  } catch {
+    // Graceful fallback if cross-origin buffer security forbids reading
+  }
 }

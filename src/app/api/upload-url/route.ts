@@ -44,7 +44,7 @@ export async function POST(req: NextRequest) {
       expiresIn: 300,
     });
 
-    const imageUrl = `${R2_PUBLIC_URL}/${s3ObjectKey}`;
+    const imageUrl = `/api/photos/view?key=${encodeURIComponent(s3ObjectKey)}`;
 
     return NextResponse.json({
       uploadUrl,

@@ -33,18 +33,26 @@ export async function GET(
     }> = [];
 
     if (isRevealed) {
-      photos = await prisma.photo.findMany({
+      const rawPhotos = await prisma.photo.findMany({
         where: { eventId },
         orderBy: { createdAt: "desc" },
         select: {
           id: true,
           imageUrl: true,
+          s3ObjectKey: true,
           createdAt: true,
           guest: {
             select: { name: true },
           },
         },
       });
+
+      photos = rawPhotos.map((p) => ({
+        id: p.id,
+        imageUrl: `/api/photos/view?key=${encodeURIComponent(p.s3ObjectKey)}`,
+        createdAt: p.createdAt,
+        guest: p.guest,
+      }));
     }
 
     // Check if current guest session cookie exists

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useRef, useEffect, use } from "react";
+import React, { useState, useRef, useEffect, use, useCallback } from "react";
 import Link from "next/link";
 import {
   EFFECT_PRESETS,
@@ -31,7 +31,7 @@ export default function CameraPage({ params }: CameraPageProps) {
 
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [facingMode, setFacingMode] = useState<"environment" | "user">("environment");
-  const [selectedEffect, setSelectedEffect] = useState<FilterEffect>("moody");
+  const [selectedEffect, setSelectedEffect] = useState<FilterEffect>("signature");
   const [isProcessing, setIsProcessing] = useState(false);
   const [statusMessage, setStatusMessage] = useState("");
   const [flashActive, setFlashActive] = useState(false);
@@ -55,6 +55,20 @@ export default function CameraPage({ params }: CameraPageProps) {
   const [myPhotos, setMyPhotos] = useState<GuestPhotoItem[]>([]);
   const [loadingMyPhotos, setLoadingMyPhotos] = useState(false);
   const [deletingPhotoId, setDeletingPhotoId] = useState<string | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+
+  // Helper to reliably resume video playback if mobile browser paused it
+  const resumeCamera = useCallback(async () => {
+    if (videoRef.current) {
+      try {
+        if (videoRef.current.paused) {
+          await videoRef.current.play();
+        }
+      } catch (e) {
+        console.warn("Could not resume camera play:", e);
+      }
+    }
+  }, []);
 
   // Load event details and guest photo count on mount
   useEffect(() => {
@@ -88,6 +102,22 @@ export default function CameraPage({ params }: CameraPageProps) {
       mounted = false;
     };
   }, [eventId]);
+
+  // Keep camera alive across visibility and focus changes
+  useEffect(() => {
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") {
+        resumeCamera();
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibility);
+    window.addEventListener("focus", resumeCamera);
+
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibility);
+      window.removeEventListener("focus", resumeCamera);
+    };
+  }, [resumeCamera]);
 
   // Handle live video stream with 3:4 PORTRAIT aspect ratio
   useEffect(() => {
@@ -263,6 +293,7 @@ export default function CameraPage({ params }: CameraPageProps) {
     } finally {
       setIsProcessing(false);
       setStatusMessage("");
+      resumeCamera();
     }
   };
 
@@ -305,6 +336,7 @@ export default function CameraPage({ params }: CameraPageProps) {
       setIsProcessing(false);
       setStatusMessage("");
       if (fileInputRef.current) fileInputRef.current.value = "";
+      resumeCamera();
     }
   };
 
@@ -312,6 +344,7 @@ export default function CameraPage({ params }: CameraPageProps) {
   const handleOpenMyPhotos = async () => {
     setShowMyPhotosModal(true);
     setLoadingMyPhotos(true);
+    setConfirmDeleteId(null);
     try {
       const res = await fetch(`/api/photos?eventId=${eventId}`);
       if (res.ok) {
@@ -326,12 +359,20 @@ export default function CameraPage({ params }: CameraPageProps) {
     }
   };
 
-  // Delete a photo owned by this guest
-  const handleDeletePhoto = async (photoId: string) => {
-    if (!confirm("Are you sure you want to delete this photo? You will regain 1 shot in your roll.")) {
-      return;
-    }
+  // Close My Photos modal and ensure live camera feed resumes immediately
+  const handleCloseMyPhotos = () => {
+    setShowMyPhotosModal(false);
+    setConfirmDeleteId(null);
+    setDeletingPhotoId(null);
+    setIsProcessing(false);
+    // Explicitly wake up video playback
+    setTimeout(() => {
+      resumeCamera();
+    }, 60);
+  };
 
+  // Delete a photo owned by this guest (with smooth in-modal confirmation)
+  const handleDeletePhoto = async (photoId: string) => {
     try {
       setDeletingPhotoId(photoId);
       const res = await fetch(`/api/photos?photoId=${photoId}&eventId=${eventId}`, {
@@ -348,6 +389,7 @@ export default function CameraPage({ params }: CameraPageProps) {
       setMyPhotos(updatedList);
       setPhotosTaken(data.photoCount);
       setLastPreview(updatedList.length > 0 ? updatedList[0].imageUrl : null);
+      setConfirmDeleteId(null);
 
       setBannerText(`Photo deleted! You now have ${data.remainingPhotos} shots left.`);
       setTimeout(() => setBannerText(null), 3500);
@@ -355,6 +397,8 @@ export default function CameraPage({ params }: CameraPageProps) {
       alert((err as Error).message || "Error deleting photo");
     } finally {
       setDeletingPhotoId(null);
+      // Ensure camera stays active in background
+      resumeCamera();
     }
   };
 
@@ -540,7 +584,7 @@ export default function CameraPage({ params }: CameraPageProps) {
                 key={preset.id}
                 onClick={() => setSelectedEffect(preset.id)}
                 disabled={isProcessing}
-                className={`flex-shrink-0 py-1.5 px-2 rounded-xl text-[10px] font-semibold transition-all text-center flex items-center space-x-1.5 ${
+                className={`flex-shrink-0 py-1.5 px-2.5 rounded-xl text-[10px] font-semibold transition-all text-center flex items-center space-x-1.5 ${
                   isSelected
                     ? "bg-white text-[#461a3d] shadow-sm font-bold scale-[1.03]"
                     : "bg-[#33112b] text-[#d8a4cb] hover:bg-[#3d1534]"
@@ -639,10 +683,10 @@ export default function CameraPage({ params }: CameraPageProps) {
         </Link>
       </footer>
 
-      {/* Manage Guest Photos Modal (Allows User to Delete Photos) */}
+      {/* Manage Guest Photos Modal (Allows User to Delete Photos with smooth inline confirmation) */}
       {showMyPhotosModal && (
         <div
-          onClick={() => setShowMyPhotosModal(false)}
+          onClick={handleCloseMyPhotos}
           className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-end sm:items-center justify-center p-3 sm:p-4"
         >
           <div
@@ -658,7 +702,7 @@ export default function CameraPage({ params }: CameraPageProps) {
                 </p>
               </div>
               <button
-                onClick={() => setShowMyPhotosModal(false)}
+                onClick={handleCloseMyPhotos}
                 className="w-8 h-8 rounded-full bg-[#2a1d28] text-stone-400 hover:text-white flex items-center justify-center text-sm"
               >
                 ✕
@@ -677,38 +721,62 @@ export default function CameraPage({ params }: CameraPageProps) {
                 </div>
               ) : (
                 <div className="grid grid-cols-2 gap-3">
-                  {myPhotos.map((photo, index) => (
-                    <div
-                      key={photo.id}
-                      className="bg-[#241a23] border border-[#3d2b3b] rounded-2xl p-2 flex flex-col space-y-2 relative group"
-                    >
-                      <div className="w-full aspect-[3/4] rounded-xl overflow-hidden bg-black relative">
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img
-                          src={photo.imageUrl}
-                          alt={`Shot #${myPhotos.length - index}`}
-                          className="w-full h-full object-cover"
-                        />
-                      </div>
+                  {myPhotos.map((photo, index) => {
+                    const isConfirming = confirmDeleteId === photo.id;
+                    const isDeleting = deletingPhotoId === photo.id;
 
-                      <div className="flex items-center justify-between px-1">
-                        <span className="text-[10px] text-stone-400 font-mono">
-                          {new Date(photo.createdAt).toLocaleTimeString([], {
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          })}
-                        </span>
+                    return (
+                      <div
+                        key={photo.id}
+                        className="bg-[#241a23] border border-[#3d2b3b] rounded-2xl p-2 flex flex-col space-y-2 relative group"
+                      >
+                        <div className="w-full aspect-[3/4] rounded-xl overflow-hidden bg-black relative">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            src={photo.imageUrl}
+                            alt={`Shot #${myPhotos.length - index}`}
+                            className="w-full h-full object-cover"
+                          />
+                        </div>
 
-                        <button
-                          onClick={() => handleDeletePhoto(photo.id)}
-                          disabled={deletingPhotoId === photo.id}
-                          className="px-2.5 py-1 bg-red-950/80 hover:bg-red-900 border border-red-700/60 text-red-200 rounded-lg text-[10px] font-semibold transition-all flex items-center space-x-1 disabled:opacity-50"
-                        >
-                          <span>{deletingPhotoId === photo.id ? "..." : "Delete 🗑️"}</span>
-                        </button>
+                        <div className="flex items-center justify-between px-1">
+                          <span className="text-[10px] text-stone-400 font-mono">
+                            {new Date(photo.createdAt).toLocaleTimeString([], {
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            })}
+                          </span>
+
+                          {!isConfirming ? (
+                            <button
+                              onClick={() => setConfirmDeleteId(photo.id)}
+                              disabled={isDeleting}
+                              className="px-2.5 py-1 bg-red-950/80 hover:bg-red-900 border border-red-700/60 text-red-200 rounded-lg text-[10px] font-semibold transition-all flex items-center space-x-1 disabled:opacity-50"
+                            >
+                              <span>{isDeleting ? "..." : "Delete 🗑️"}</span>
+                            </button>
+                          ) : (
+                            <div className="flex items-center space-x-1">
+                              <button
+                                onClick={() => handleDeletePhoto(photo.id)}
+                                disabled={isDeleting}
+                                className="px-2 py-0.5 bg-red-600 hover:bg-red-500 text-white rounded text-[10px] font-bold shadow"
+                              >
+                                {isDeleting ? "..." : "Confirm"}
+                              </button>
+                              <button
+                                onClick={() => setConfirmDeleteId(null)}
+                                disabled={isDeleting}
+                                className="px-1.5 py-0.5 bg-[#332230] text-stone-300 rounded text-[10px]"
+                              >
+                                ✕
+                              </button>
+                            </div>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>
@@ -719,7 +787,7 @@ export default function CameraPage({ params }: CameraPageProps) {
                 Remaining: <strong className="text-white font-mono">{remainingShots}</strong> shots
               </span>
               <button
-                onClick={() => setShowMyPhotosModal(false)}
+                onClick={handleCloseMyPhotos}
                 className="px-4 py-2 bg-[#461a3d] hover:bg-[#59214e] text-white text-xs font-bold rounded-xl border border-[#6b285d]"
               >
                 Back to Camera

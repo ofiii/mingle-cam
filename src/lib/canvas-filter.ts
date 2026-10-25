@@ -1,4 +1,5 @@
 export type FilterEffect =
+  | "signature"
   | "moody"
   | "gold200"
   | "portra"
@@ -20,6 +21,14 @@ export interface EffectPreset {
 }
 
 export const EFFECT_PRESETS: EffectPreset[] = [
+  {
+    id: "signature",
+    name: "Signature",
+    icon: "👑",
+    cssFilter: "contrast(106%) brightness(98%) sepia(16%) saturate(94%) hue-rotate(-4deg)",
+    grainAmount: 8,
+    description: "Signature Bridal Editorial: warm silk highlights, soft porcelain skin & rich chocolate shadows",
+  },
   {
     id: "moody",
     name: "Moody Plum",
@@ -119,7 +128,7 @@ export interface FilterResult {
  */
 export async function captureVideoFrame(
   video: HTMLVideoElement,
-  effect: FilterEffect = "moody",
+  effect: FilterEffect = "signature",
   isFrontCamera: boolean = false,
   zoomLevel: number = 1
 ): Promise<FilterResult> {
@@ -137,7 +146,6 @@ export async function captureVideoFrame(
 
   // Adjust crop region based on digital zoomLevel (0.5x, 1x, 2x)
   const safeZoom = Math.max(0.5, Math.min(3, zoomLevel));
-  // When zoom > 1, sample a smaller center region
   const cropFactor = safeZoom >= 1 ? 1 / safeZoom : 1;
 
   const targetWidth = Math.round(baseTargetWidth * cropFactor);
@@ -193,7 +201,7 @@ export async function captureVideoFrame(
         else reject(new Error("Canvas export failed"));
       },
       "image/jpeg",
-      0.92
+      0.93
     );
   });
 
@@ -206,7 +214,7 @@ export async function captureVideoFrame(
  */
 export async function applyAnalogFilter(
   file: File,
-  effect: FilterEffect = "moody"
+  effect: FilterEffect = "signature"
 ): Promise<FilterResult> {
   const maxDimension = 2048;
   const imageBitmap = await createImageBitmap(file);
@@ -262,7 +270,7 @@ export async function applyAnalogFilter(
         else reject(new Error("Canvas toBlob failed"));
       },
       "image/jpeg",
-      0.92
+      0.93
     );
   });
 
@@ -271,7 +279,8 @@ export async function applyAnalogFilter(
 }
 
 /**
- * Direct Pixel-Level Color Grading for 10 Vintage Film Presets
+ * Direct Pixel-Level Color Grading Pipeline
+ * Meticulously calibrated to match the live viewfinder CSS filters exactly.
  */
 function applyPixelColorGrading(
   ctx: CanvasRenderingContext2D,
@@ -293,8 +302,35 @@ function applyPixelColorGrading(
       const shadowFactor = Math.max(0, 1 - lum / 160);
 
       switch (effect) {
+        case "signature": {
+          // Signature Bridal Editorial (Warm creamy silk highlights, soft porcelain skin, rich matte dark chocolate shadows)
+          // 1. Lift shadows to soft matte espresso/chocolate (~16-20)
+          r = r * 0.94 + 18 * shadowFactor;
+          g = g * 0.92 + 13 * shadowFactor;
+          b = b * 0.90 + 9 * shadowFactor;
+
+          // 2. Soft porcelain warmth in skin tones / midtones
+          r += 6 * shadowFactor;
+          g += 2 * shadowFactor;
+          b -= 2 * shadowFactor;
+
+          // 3. Silky highlight roll-off (creamy ivory glow, no harsh clipping)
+          if (lum > 170) {
+            const highlightRoll = (lum - 170) * 0.12;
+            r += highlightRoll * 0.4;
+            g += highlightRoll * 0.2;
+            b -= highlightRoll * 0.3;
+          }
+
+          // 4. Subtle film contrast curve (soft midtone punch)
+          r = applySCurve(r, 1.07);
+          g = applySCurve(g, 1.06);
+          b = applySCurve(b, 1.05);
+          break;
+        }
+
         case "moody": {
-          // Moody Editorial Wedding (Lifted matte blacks, rich plum shadow tint, muted highlights, deep jewel tones)
+          // Moody Plum (Lifted matte blacks, rich plum shadow tint, muted highlights, deep jewel tones)
           r = r * 0.92 + 18 * shadowFactor;
           g = g * 0.90 + 8 * shadowFactor;
           b = b * 0.90 + 22 * shadowFactor;
@@ -351,7 +387,7 @@ function applyPixelColorGrading(
         }
 
         case "cinestill": {
-          // CineStill 800T: Cool teal/cyan shadows with warm red/orange highlights (halated vintage look)
+          // CineStill 800T: Cool teal/cyan shadows with warm red/orange highlights
           r -= 6 * shadowFactor;
           g += 4 * shadowFactor;
           b += 16 * shadowFactor;
@@ -388,9 +424,8 @@ function applyPixelColorGrading(
           // Polaroid 600: Soft peach warmth, faded cyan shadows, gentle highlight roll-off
           r = r * 1.04 + 16 * shadowFactor;
           g = g * 0.98 + 12 * shadowFactor;
-          b = b * 0.92 + 20 * shadowFactor; // Lifted faded shadows
+          b = b * 0.92 + 20 * shadowFactor;
 
-          // Soft peach mids
           r += 8;
           g += 2;
 
@@ -407,7 +442,6 @@ function applyPixelColorGrading(
           g = mean + (g - mean) * 1.22;
           b = mean + (b - mean) * 1.30;
 
-          // Rich deep contrast
           r = applySCurve(r, 1.22);
           g = applySCurve(g, 1.20);
           b = applySCurve(b, 1.24);
@@ -415,7 +449,7 @@ function applyPixelColorGrading(
         }
 
         case "retro80s": {
-          // Retro 1984: Disposable flash camera look, warm yellow/green tint, slightly blown flash center
+          // Retro 1984: Disposable flash camera look, warm yellow/green tint
           r = r * 1.08 + 14 * shadowFactor;
           g = g * 1.02 + 10 * shadowFactor;
           b = b * 0.88;

@@ -79,9 +79,12 @@ export default function GuestLandingPage({ params }: GuestLandingProps) {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#131114] text-stone-100 flex items-center justify-center p-4 font-sans">
+      <div className="min-h-screen bg-stone-950 text-stone-100 flex items-center justify-center p-4 font-sans">
         <div className="text-center">
-          <div className="w-8 h-8 border-3 border-[#9b4288] border-t-transparent rounded-full animate-spin mx-auto mb-3" />
+          <div
+            className="w-8 h-8 border-3 border-t-transparent rounded-full animate-spin mx-auto mb-3"
+            style={{ borderColor: themeColor, borderTopColor: "transparent" }}
+          />
           <p className="text-xs text-stone-400 font-medium tracking-wide">
             Loading Camera...
           </p>
@@ -91,10 +94,25 @@ export default function GuestLandingPage({ params }: GuestLandingProps) {
   }
 
   return (
-    <div className="min-h-screen bg-[#131114] text-stone-100 flex flex-col items-center justify-center p-4 sm:p-6 font-sans select-none">
-      <div className="w-full max-w-sm bg-[#1c161d] border border-[#382736] rounded-3xl p-6 sm:p-8 shadow-xl relative">
+    <div className="min-h-screen bg-stone-950 text-stone-100 flex flex-col items-center justify-center p-4 sm:p-6 font-sans select-none">
+      <div
+        className="w-full max-w-sm bg-stone-900 border border-stone-800 rounded-3xl p-6 sm:p-8 shadow-2xl relative overflow-hidden"
+      >
+        {/* Dynamic theme accent line at the top */}
+        <div
+          className="absolute top-0 inset-x-0 h-1.5"
+          style={{ backgroundColor: themeColor }}
+        />
+
         <div className="text-center mb-6">
-          <div className="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-[#351a30] text-[#e0b7d6] text-xs font-semibold mb-3 border border-[#52294a]">
+          <div
+            className="inline-flex items-center space-x-2 px-3 py-1 rounded-full text-xs font-semibold mb-3 border shadow-sm"
+            style={{
+              backgroundColor: `${themeColor}26`,
+              borderColor: `${themeColor}66`,
+              color: "#ffffff",
+            }}
+          >
             <span>📷</span>
             <span>Shared Disposable Camera</span>
           </div>
@@ -130,7 +148,7 @@ export default function GuestLandingPage({ params }: GuestLandingProps) {
               value={guestName}
               onChange={(e) => setGuestName(e.target.value)}
               disabled={submitting}
-              className="w-full px-4 py-3 bg-[#140e14] border border-[#3e2b3c] rounded-xl text-stone-100 placeholder-stone-500 focus:outline-none focus:ring-2 focus:ring-white/20 font-medium text-sm transition-all"
+              className="w-full px-4 py-3 bg-stone-950 border border-stone-800 rounded-xl text-stone-100 placeholder-stone-500 focus:outline-none focus:border-stone-600 focus:ring-1 focus:ring-white/20 font-medium text-sm transition-all"
             />
           </div>
 
@@ -138,7 +156,7 @@ export default function GuestLandingPage({ params }: GuestLandingProps) {
             type="submit"
             disabled={submitting || !guestName.trim()}
             style={{ backgroundColor: themeColor }}
-            className="w-full py-3.5 hover:brightness-110 text-white font-bold rounded-xl shadow transition-transform active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed text-sm flex items-center justify-center space-x-2 border border-white/20"
+            className="w-full py-3.5 hover:brightness-110 text-white font-bold rounded-xl shadow-lg transition-transform active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed text-sm flex items-center justify-center space-x-2 border border-white/20"
           >
             {submitting ? (
               <>
@@ -151,9 +169,9 @@ export default function GuestLandingPage({ params }: GuestLandingProps) {
           </button>
         </form>
 
-        <div className="mt-6 pt-4 border-t border-[#2e202c] text-center">
+        <div className="mt-6 pt-4 border-t border-stone-800/80 text-center">
           <span className="text-[11px] text-stone-500 block">
-            Digital Film Roll • 3:4 Portrait Vintage • 20 Exposures / Guest
+            Digital Film Roll • 3:4 Portrait Vintage • {maxPhotos} Exposures / Guest
           </span>
         </div>
       </div>

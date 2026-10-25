@@ -19,6 +19,7 @@ export default function GalleryPage({ params }: GalleryPageProps) {
 
   const [loading, setLoading] = useState(true);
   const [eventName, setEventName] = useState("Mingle Session");
+  const [themeColor, setThemeColor] = useState("#461a3d");
   const [revealDate, setRevealDate] = useState<Date | null>(null);
   const [isRevealed, setIsRevealed] = useState(false);
   const [totalPhotos, setTotalPhotos] = useState(0);
@@ -45,6 +46,7 @@ export default function GalleryPage({ params }: GalleryPageProps) {
         if (!mounted) return;
 
         setEventName(data.event?.name || "Mingle Session");
+        if (data.event?.themeColor) setThemeColor(data.event.themeColor);
         setTotalPhotos(data.event?.totalPhotos || 0);
         if (data.currentGuest) {
           setCurrentGuest({ id: data.currentGuest.id, name: data.currentGuest.name });
@@ -117,9 +119,12 @@ export default function GalleryPage({ params }: GalleryPageProps) {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#131114] text-stone-100 flex items-center justify-center p-4 font-sans">
+      <div className="min-h-screen bg-stone-950 text-stone-100 flex items-center justify-center p-4 font-sans">
         <div className="text-center">
-          <div className="w-8 h-8 border-3 border-[#9b4288] border-t-transparent rounded-full animate-spin mx-auto mb-3" />
+          <div
+            className="w-8 h-8 border-3 border-t-transparent rounded-full animate-spin mx-auto mb-3"
+            style={{ borderColor: themeColor, borderTopColor: "transparent" }}
+          />
           <p className="text-xs text-stone-400 font-medium">Opening Album Vault...</p>
         </div>
       </div>
@@ -127,9 +132,9 @@ export default function GalleryPage({ params }: GalleryPageProps) {
   }
 
   return (
-    <div className="min-h-screen bg-[#131114] text-stone-100 flex flex-col font-sans select-none">
+    <div className="min-h-screen bg-stone-950 text-stone-100 flex flex-col font-sans select-none">
       {/* Header */}
-      <header className="sticky top-0 z-30 bg-[#1c161d]/90 backdrop-blur-md border-b border-[#2e202c] px-4 py-3 flex items-center justify-between">
+      <header className="sticky top-0 z-30 bg-stone-900/90 backdrop-blur-md border-b border-stone-800 px-4 py-3 flex items-center justify-between">
         <div>
           <h1 className="text-sm font-bold text-white tracking-tight">
             {eventName}
@@ -143,7 +148,8 @@ export default function GalleryPage({ params }: GalleryPageProps) {
 
         <Link
           href={`/${eventId}/camera`}
-          className="px-3.5 py-1.5 bg-[#461a3d] hover:bg-[#59214e] text-white text-xs font-semibold rounded-xl border border-[#6b285d] transition-all flex items-center space-x-1.5 shadow"
+          style={{ backgroundColor: themeColor }}
+          className="px-3.5 py-1.5 hover:brightness-110 text-white text-xs font-semibold rounded-xl border border-white/20 transition-all flex items-center space-x-1.5 shadow"
         >
           <span>📷</span>
           <span>Open Camera</span>
@@ -155,7 +161,7 @@ export default function GalleryPage({ params }: GalleryPageProps) {
         {!isRevealed ? (
           /* LOCKED VAULT VIEW WITH COUNTDOWN */
           <div className="flex flex-col items-center justify-center py-12 px-4 text-center">
-            <div className="w-16 h-16 rounded-2xl bg-[#261824] border border-[#482243] flex items-center justify-center mb-5 shadow">
+            <div className="w-16 h-16 rounded-2xl bg-stone-900 border border-stone-800 flex items-center justify-center mb-5 shadow">
               <span className="text-2xl">🔒</span>
             </div>
 
@@ -183,7 +189,7 @@ export default function GalleryPage({ params }: GalleryPageProps) {
               ].map((item, idx) => (
                 <div
                   key={idx}
-                  className="bg-[#1c161d] border border-[#352533] rounded-2xl p-3 flex flex-col items-center justify-center shadow-sm"
+                  className="bg-stone-900 border border-stone-800 rounded-2xl p-3 flex flex-col items-center justify-center shadow-sm"
                 >
                   <span className="text-2xl sm:text-3xl font-extrabold text-white font-mono tabular-nums">
                     {String(item.value).padStart(2, "0")}
@@ -196,8 +202,11 @@ export default function GalleryPage({ params }: GalleryPageProps) {
             </div>
 
             {/* Vault Stats */}
-            <div className="inline-flex items-center space-x-2 px-4 py-2 bg-[#1c161d] rounded-full border border-[#352533] text-xs text-stone-300">
-              <span className="w-2 h-2 rounded-full bg-[#d8a4cb]" />
+            <div className="inline-flex items-center space-x-2 px-4 py-2 bg-stone-900 rounded-full border border-stone-800 text-xs text-stone-300">
+              <span
+                className="w-2 h-2 rounded-full"
+                style={{ backgroundColor: themeColor }}
+              />
               <span>
                 <strong className="text-white font-bold">{totalPhotos}</strong> analog photos stored safely so far
               </span>
@@ -208,7 +217,10 @@ export default function GalleryPage({ params }: GalleryPageProps) {
           <div>
             <div className="mb-6 flex items-center justify-between">
               <div>
-                <span className="text-xs uppercase tracking-wider text-[#d8a4cb] font-bold">
+                <span
+                  className="text-xs uppercase tracking-wider font-bold"
+                  style={{ color: themeColor }}
+                >
                   ✨ The Vault Is Open!
                 </span>
                 <h2 className="text-xl sm:text-2xl font-bold text-white">
@@ -227,7 +239,7 @@ export default function GalleryPage({ params }: GalleryPageProps) {
                   <div
                     key={photo.id}
                     onClick={() => setSelectedPhoto(photo)}
-                    className="break-inside-avoid bg-[#1c161d] border border-[#352533] rounded-2xl overflow-hidden cursor-pointer hover:border-[#6b285d] transition-all shadow-md group relative"
+                    className="break-inside-avoid bg-stone-900 border border-stone-800 rounded-2xl overflow-hidden cursor-pointer hover:border-white/30 transition-all shadow-md group relative"
                   >
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
@@ -236,7 +248,7 @@ export default function GalleryPage({ params }: GalleryPageProps) {
                       loading="lazy"
                       className="w-full h-auto object-cover group-hover:scale-[1.01] transition-transform duration-300"
                     />
-                    <div className="p-3 flex items-center justify-between text-xs text-stone-300 bg-[#161117] border-t border-[#2e202c]">
+                    <div className="p-3 flex items-center justify-between text-xs text-stone-300 bg-stone-950 border-t border-stone-800/80">
                       <span className="font-semibold text-white truncate">
                         👤 {photo.guest.name}
                       </span>

@@ -270,21 +270,13 @@ export default function CameraPage({ params }: CameraPageProps) {
       }
 
       setLastPreview(previewUrl);
-
-      // Direct R2 upload via presigned URL
-      setStatusMessage("Saving to event vault...");
-      await uploadFilteredPhotoToR2({ eventId, blob });
-
       const newCount = photosTaken + 1;
       setPhotosTaken(newCount);
 
-      // Refresh guest photo list
-      fetch(`/api/photos?eventId=${eventId}`)
-        .then((res) => res.json())
-        .then((data) => {
-          if (data.photos) setMyPhotos(data.photos);
-        })
-        .catch(() => {});
+      // Instantly release shutter and resume camera (zero lag for guest)
+      setIsProcessing(false);
+      setStatusMessage("");
+      resumeCamera();
 
       if (newCount >= maxPhotosLimit) {
         setBannerText(`Roll completed! You used all ${maxPhotosLimit} exposures.`);
@@ -292,10 +284,26 @@ export default function CameraPage({ params }: CameraPageProps) {
         setBannerText(`Photo locked in vault! (${maxPhotosLimit - newCount} left)`);
       }
       setTimeout(() => setBannerText(null), 3500);
+
+      // Background upload to Cloudflare R2
+      uploadFilteredPhotoToR2({ eventId, blob })
+        .then(() => {
+          fetch(`/api/photos?eventId=${eventId}`)
+            .then((res) => res.json())
+            .then((data) => {
+              if (data.photos) setMyPhotos(data.photos);
+            })
+            .catch(() => {});
+        })
+        .catch((err) => {
+          console.error("Background upload failed:", err);
+          setPhotosTaken((prev) => Math.max(0, prev - 1));
+          setBannerText("Could not save photo. Please check your connection.");
+          setTimeout(() => setBannerText(null), 4000);
+        });
     } catch (err: unknown) {
       console.error(err);
       alert((err as Error).message || "Could not process photo. Please try again.");
-    } finally {
       setIsProcessing(false);
       setStatusMessage("");
       resumeCamera();
@@ -315,18 +323,14 @@ export default function CameraPage({ params }: CameraPageProps) {
       const { blob, previewUrl } = await applyAnalogFilter(file, selectedEffect);
       setLastPreview(previewUrl);
 
-      setStatusMessage("Saving to event vault...");
-      await uploadFilteredPhotoToR2({ eventId, blob });
-
       const newCount = photosTaken + 1;
       setPhotosTaken(newCount);
 
-      fetch(`/api/photos?eventId=${eventId}`)
-        .then((res) => res.json())
-        .then((data) => {
-          if (data.photos) setMyPhotos(data.photos);
-        })
-        .catch(() => {});
+      // Instantly release processing state
+      setIsProcessing(false);
+      setStatusMessage("");
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      resumeCamera();
 
       if (newCount >= maxPhotosLimit) {
         setBannerText(`Roll completed! You used all ${maxPhotosLimit} exposures.`);
@@ -334,10 +338,26 @@ export default function CameraPage({ params }: CameraPageProps) {
         setBannerText(`Photo locked in vault! (${maxPhotosLimit - newCount} left)`);
       }
       setTimeout(() => setBannerText(null), 3500);
+
+      // Background upload to Cloudflare R2
+      uploadFilteredPhotoToR2({ eventId, blob })
+        .then(() => {
+          fetch(`/api/photos?eventId=${eventId}`)
+            .then((res) => res.json())
+            .then((data) => {
+              if (data.photos) setMyPhotos(data.photos);
+            })
+            .catch(() => {});
+        })
+        .catch((err) => {
+          console.error("Background upload failed:", err);
+          setPhotosTaken((prev) => Math.max(0, prev - 1));
+          setBannerText("Could not save photo. Please check your connection.");
+          setTimeout(() => setBannerText(null), 4000);
+        });
     } catch (err: unknown) {
       console.error(err);
       alert((err as Error).message || "Error developing photo.");
-    } finally {
       setIsProcessing(false);
       setStatusMessage("");
       if (fileInputRef.current) fileInputRef.current.value = "";
@@ -419,7 +439,7 @@ export default function CameraPage({ params }: CameraPageProps) {
       />
 
       {/* Top Header: Event Name, Flash Toggle & Film Roll Counter */}
-      <header className="w-full max-w-sm flex items-center justify-between py-2 border-b border-[#282128]">
+      <header className="w-full max-w-sm flex items-center justify-between py-2 border-b border-stone-800">
         <div>
           <span className="text-[10px] font-semibold text-stone-400 block uppercase tracking-wider">
             Mingle Disposable
@@ -437,7 +457,7 @@ export default function CameraPage({ params }: CameraPageProps) {
             className={`px-2.5 py-1 rounded-full text-xs font-semibold flex items-center space-x-1 border transition-all ${
               flashMode === "on"
                 ? "bg-amber-400/20 text-amber-300 border-amber-400/50 shadow-sm"
-                : "bg-[#1f1a21] text-stone-400 border-[#3d3240]"
+                : "bg-stone-900 text-stone-400 border-stone-800"
             }`}
             title="Toggle Flash (Burst on capture)"
           >
@@ -446,7 +466,7 @@ export default function CameraPage({ params }: CameraPageProps) {
           </button>
 
           {/* Film Counter Window */}
-          <div className="bg-[#1f1a21] border border-[#3d3240] px-3 py-1 rounded-full flex items-center space-x-1.5 shadow-inner">
+          <div className="bg-stone-900 border border-stone-800 px-3 py-1 rounded-full flex items-center space-x-1.5 shadow-inner">
             <span className="text-[10px] text-stone-400 font-medium uppercase tracking-wider">LEFT</span>
             <span className="text-sm font-bold text-stone-100 font-mono tabular-nums">
               {remainingShots}
@@ -461,7 +481,7 @@ export default function CameraPage({ params }: CameraPageProps) {
         className="w-full max-w-sm my-auto rounded-[28px] p-3.5 border shadow-2xl flex flex-col items-center relative transition-colors duration-300"
         style={{
           backgroundColor: themeColor,
-          borderColor: "rgba(255, 255, 255, 0.18)",
+          borderColor: "rgba(255, 255, 255, 0.2)",
         }}
       >
         {/* Subtle camera chassis details */}
@@ -478,7 +498,7 @@ export default function CameraPage({ params }: CameraPageProps) {
         </div>
 
         {/* 3:4 PORTRAIT Viewfinder Window */}
-        <div className="w-full aspect-[3/4] max-h-[55vh] bg-black rounded-2xl border-4 border-[#2b0f25] relative flex items-center justify-center overflow-hidden shadow-inner">
+        <div className="w-full aspect-[3/4] max-h-[55vh] bg-black rounded-2xl border-4 border-black/40 relative flex items-center justify-center overflow-hidden shadow-inner">
           {/* Live Video Feed with Filter Preview & Zoom scale */}
           <video
             ref={videoRef}
@@ -502,7 +522,7 @@ export default function CameraPage({ params }: CameraPageProps) {
               <button
                 onClick={() => fileInputRef.current?.click()}
                 disabled={isLimitReached}
-                className="px-4 py-2 bg-white text-[#461a3d] rounded-xl text-xs font-bold transition-all shadow hover:bg-stone-100"
+                className="px-4 py-2 bg-white text-stone-900 rounded-xl text-xs font-bold transition-all shadow hover:bg-stone-100"
               >
                 Choose / Snap Photo
               </button>
@@ -551,15 +571,18 @@ export default function CameraPage({ params }: CameraPageProps) {
 
           {/* Developing State */}
           {isProcessing && (
-            <div className="absolute inset-0 bg-[#2b0f25]/90 backdrop-blur-sm flex flex-col items-center justify-center p-4 text-center z-30">
-              <div className="w-8 h-8 border-3 border-[#d8a4cb] border-t-transparent rounded-full animate-spin mb-2" />
+            <div className="absolute inset-0 bg-black/80 backdrop-blur-sm flex flex-col items-center justify-center p-4 text-center z-30">
+              <div
+                className="w-8 h-8 border-3 border-t-transparent rounded-full animate-spin mb-2"
+                style={{ borderColor: themeColor, borderTopColor: "transparent" }}
+              />
               <p className="text-xs font-semibold text-stone-100">{statusMessage}</p>
             </div>
           )}
 
           {/* Limit Reached (Max Photos Done) Overlay */}
           {isLimitReached && (
-            <div className="absolute inset-0 bg-[#2b0f25]/95 backdrop-blur-sm flex flex-col items-center justify-center p-5 text-center z-30">
+            <div className="absolute inset-0 bg-black/85 backdrop-blur-sm flex flex-col items-center justify-center p-5 text-center z-30">
               <span className="text-3xl mb-2">🎞️</span>
               <p className="text-sm font-bold text-white mb-1">Film Roll Completed</p>
               <p className="text-xs text-stone-300 max-w-[220px] mb-3">
@@ -597,8 +620,8 @@ export default function CameraPage({ params }: CameraPageProps) {
                 disabled={isProcessing}
                 className={`flex-shrink-0 py-1.5 px-2.5 rounded-xl text-[10px] font-semibold transition-all text-center flex items-center space-x-1.5 ${
                   isSelected
-                    ? "bg-white text-[#461a3d] shadow-sm font-bold scale-[1.03]"
-                    : "bg-[#33112b] text-[#d8a4cb] hover:bg-[#3d1534]"
+                    ? "bg-white text-stone-900 shadow-md font-bold scale-[1.03]"
+                    : "bg-black/35 text-white/90 hover:bg-black/50 border border-white/10"
                 }`}
                 title={preset.description}
               >
@@ -609,8 +632,8 @@ export default function CameraPage({ params }: CameraPageProps) {
           })}
         </div>
 
-        {/* Shutter Deck: Flip Camera moved to purple card next to LAST */}
-        <div className="w-full mt-3.5 pt-2.5 border-t border-[#5d2351] flex items-center justify-between px-2">
+        {/* Shutter Deck: Flip Camera moved next to LAST */}
+        <div className="w-full mt-3.5 pt-2.5 border-t border-white/15 flex items-center justify-between px-2">
           {/* Used Counter */}
           <div className="text-center w-16">
             <span className="text-[10px] text-white/70 uppercase tracking-wider block font-medium">
@@ -626,7 +649,7 @@ export default function CameraPage({ params }: CameraPageProps) {
             aria-label="Capture Photo"
             className="group relative flex items-center justify-center active:scale-95 transition-transform disabled:opacity-40 disabled:cursor-not-allowed mx-auto"
           >
-            <div className="w-18 h-18 rounded-full bg-[#2a0e24] border-2 border-[#6d275f] p-1 flex items-center justify-center shadow-lg">
+            <div className="w-18 h-18 rounded-full bg-black/40 border-2 border-white/30 p-1 flex items-center justify-center shadow-lg">
               <div className="w-14 h-14 rounded-full bg-white group-hover:bg-stone-100 active:bg-stone-200 transition-colors shadow-md flex items-center justify-center">
                 <div className="w-8 h-8 rounded-full border border-stone-300" />
               </div>
@@ -640,7 +663,7 @@ export default function CameraPage({ params }: CameraPageProps) {
               onClick={toggleFacingMode}
               disabled={isProcessing}
               aria-label="Flip Camera"
-              className="w-9 h-9 rounded-full bg-[#2a0e24] border border-[#5d2351] text-stone-200 hover:text-white flex items-center justify-center text-sm active:scale-90 transition-all shadow"
+              className="w-9 h-9 rounded-full bg-black/40 border border-white/20 text-stone-200 hover:text-white flex items-center justify-center text-sm active:scale-90 transition-all shadow"
               title="Switch Front / Rear Camera"
             >
               ↻
@@ -653,15 +676,15 @@ export default function CameraPage({ params }: CameraPageProps) {
               className="group flex flex-col items-center"
               title="Click to view & delete your photos"
             >
-              <div className="w-9 h-9 rounded-lg bg-[#2a0e24] border border-[#5d2351] overflow-hidden flex items-center justify-center group-hover:border-[#9b4288] transition-colors relative">
+              <div className="w-9 h-9 rounded-lg bg-black/40 border border-white/20 overflow-hidden flex items-center justify-center group-hover:border-white/50 transition-colors relative">
                 {lastPreview ? (
                   /* eslint-disable-next-line @next/next/no-img-element */
                   <img src={lastPreview} alt="Last capture" className="w-full h-full object-cover" />
                 ) : (
-                  <span className="text-[10px] text-stone-500 font-mono">--</span>
+                  <span className="text-[10px] text-stone-400 font-mono">--</span>
                 )}
                 {myPhotos.length > 0 && (
-                  <span className="absolute bottom-0 inset-x-0 bg-black/70 text-[8px] text-stone-200 font-mono text-center">
+                  <span className="absolute bottom-0 inset-x-0 bg-black/75 text-[8px] text-stone-200 font-mono text-center">
                     {myPhotos.length}
                   </span>
                 )}
@@ -673,13 +696,13 @@ export default function CameraPage({ params }: CameraPageProps) {
 
       {/* Floating Status Notification */}
       {bannerText && (
-        <div className="fixed bottom-18 px-4 py-2 bg-[#2a0e24] border border-[#5d2351] text-stone-100 text-xs rounded-full shadow-lg z-20">
+        <div className="fixed bottom-18 px-4 py-2 bg-stone-900 border border-stone-700 text-stone-100 text-xs rounded-full shadow-2xl z-20">
           {bannerText}
         </div>
       )}
 
       {/* Bottom Bar */}
-      <footer className="w-full max-w-sm flex items-center justify-between pt-2 border-t border-[#282128] text-xs">
+      <footer className="w-full max-w-sm flex items-center justify-between pt-2 border-t border-stone-800 text-xs">
         <button
           onClick={handleOpenMyPhotos}
           className="text-stone-400 hover:text-stone-200 text-[11px] underline underline-offset-4"
@@ -688,7 +711,7 @@ export default function CameraPage({ params }: CameraPageProps) {
         </button>
         <Link
           href={`/${eventId}/gallery`}
-          className="text-[#d8a4cb] hover:text-white text-xs font-semibold underline underline-offset-4 transition-colors"
+          className="text-stone-300 hover:text-white text-xs font-semibold underline underline-offset-4 transition-colors"
         >
           View Album Gallery →
         </Link>
@@ -705,7 +728,7 @@ export default function CameraPage({ params }: CameraPageProps) {
             className="w-full max-w-md bg-[#1c161d] border border-[#382736] rounded-3xl p-5 shadow-2xl flex flex-col max-h-[85vh]"
           >
             {/* Modal Header */}
-            <div className="flex items-center justify-between pb-3 border-b border-[#2e202c]">
+            <div className="flex items-center justify-between pb-3 border-b border-stone-800">
               <div>
                 <h2 className="text-base font-bold text-white">Your Captured Shots</h2>
                 <p className="text-xs text-stone-400">
@@ -714,7 +737,7 @@ export default function CameraPage({ params }: CameraPageProps) {
               </div>
               <button
                 onClick={handleCloseMyPhotos}
-                className="w-8 h-8 rounded-full bg-[#2a1d28] text-stone-400 hover:text-white flex items-center justify-center text-sm"
+                className="w-8 h-8 rounded-full bg-stone-800 text-stone-400 hover:text-white flex items-center justify-center text-sm"
               >
                 ✕
               </button>
@@ -739,7 +762,7 @@ export default function CameraPage({ params }: CameraPageProps) {
                     return (
                       <div
                         key={photo.id}
-                        className="bg-[#241a23] border border-[#3d2b3b] rounded-2xl p-2 flex flex-col space-y-2 relative group"
+                        className="bg-stone-950 border border-stone-800/80 rounded-2xl p-2 flex flex-col space-y-2 relative group"
                       >
                         <div className="w-full aspect-[3/4] rounded-xl overflow-hidden bg-black relative">
                           {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -778,7 +801,7 @@ export default function CameraPage({ params }: CameraPageProps) {
                               <button
                                 onClick={() => setConfirmDeleteId(null)}
                                 disabled={isDeleting}
-                                className="px-1.5 py-0.5 bg-[#332230] text-stone-300 rounded text-[10px]"
+                                className="px-1.5 py-0.5 bg-stone-800 text-stone-300 rounded text-[10px]"
                               >
                                 ✕
                               </button>
@@ -793,13 +816,14 @@ export default function CameraPage({ params }: CameraPageProps) {
             </div>
 
             {/* Modal Footer */}
-            <div className="pt-3 border-t border-[#2e202c] flex items-center justify-between text-xs">
+            <div className="pt-3 border-t border-stone-800 flex items-center justify-between text-xs">
               <span className="text-stone-400 text-[11px]">
                 Remaining: <strong className="text-white font-mono">{remainingShots}</strong> shots
               </span>
               <button
                 onClick={handleCloseMyPhotos}
-                className="px-4 py-2 bg-[#461a3d] hover:bg-[#59214e] text-white text-xs font-bold rounded-xl border border-[#6b285d]"
+                style={{ backgroundColor: themeColor }}
+                className="px-4 py-2 hover:brightness-110 text-white text-xs font-bold rounded-xl border border-white/20"
               >
                 Back to Camera
               </button>

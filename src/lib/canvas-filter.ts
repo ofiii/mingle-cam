@@ -25,9 +25,9 @@ export const EFFECT_PRESETS: EffectPreset[] = [
     id: "signature",
     name: "Signature",
     icon: "👑",
-    cssFilter: "contrast(106%) brightness(98%) sepia(16%) saturate(94%) hue-rotate(-4deg)",
+    cssFilter: "contrast(118%) brightness(95%) sepia(12%) saturate(98%)",
     grainAmount: 8,
-    description: "Signature Bridal Editorial: warm silk highlights, soft porcelain skin & rich chocolate shadows",
+    description: "Signature Bridal Editorial: warm silk highlights, soft porcelain skin & rich deep black shadows",
   },
   {
     id: "moody",
@@ -305,29 +305,35 @@ function applyPixelColorGradingAndGrain(
 
       switch (effect) {
         case "signature": {
-          // Signature Bridal Editorial (Warm creamy silk highlights, soft porcelain skin, rich matte dark chocolate shadows)
-          // 1. Lift shadows to soft matte espresso/chocolate (~16-20)
-          r = r * 0.94 + 18 * shadowFactor;
-          g = g * 0.92 + 13 * shadowFactor;
-          b = b * 0.90 + 9 * shadowFactor;
-
-          // 2. Soft porcelain warmth in skin tones / midtones
-          r += 6 * shadowFactor;
-          g += 2 * shadowFactor;
-          b -= 2 * shadowFactor;
-
-          // 3. Silky highlight roll-off (creamy ivory glow, no harsh clipping)
-          if (lum > 170) {
-            const highlightRoll = (lum - 170) * 0.12;
-            r += highlightRoll * 0.4;
-            g += highlightRoll * 0.2;
-            b -= highlightRoll * 0.3;
+          // Signature Bridal Editorial (Deep rich blacks, porcelain skin, creamy silk highlights, punchy contrast)
+          // 1. Deepen blacks and compress toe for true rich blacks (no washed-out gray)
+          if (lum < 80) {
+            const blackToe = (80 - lum) / 80; // 1.0 at pure black, 0 at 80
+            // Gently pull shadows down into rich, deep velvety black
+            r = r * (1.0 - blackToe * 0.28);
+            g = g * (1.0 - blackToe * 0.30);
+            b = b * (1.0 - blackToe * 0.32);
           }
 
-          // 4. Subtle film contrast curve (soft midtone punch)
-          r = applySCurve(r, 1.07);
-          g = applySCurve(g, 1.06);
-          b = applySCurve(b, 1.05);
+          // 2. Soft porcelain warmth in skin tones / midtones
+          if (lum >= 60 && lum <= 185) {
+            r += 4;
+            g += 1.5;
+            b -= 1.5;
+          }
+
+          // 3. Silky highlight roll-off (creamy ivory glow, no harsh clipping)
+          if (lum > 175) {
+            const highlightRoll = (lum - 175) * 0.14;
+            r += highlightRoll * 0.40;
+            g += highlightRoll * 0.22;
+            b -= highlightRoll * 0.25;
+          }
+
+          // 4. Punchy editorial contrast curve (deep rich blacks, clean crisp highlights)
+          r = applySCurve(r, 1.18);
+          g = applySCurve(g, 1.17);
+          b = applySCurve(b, 1.16);
           break;
         }
 

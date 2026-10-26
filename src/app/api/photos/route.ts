@@ -13,7 +13,9 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: "Missing eventId" }, { status: 400 });
     }
 
-    const sessionToken = req.cookies.get(`mingle_session_${eventId}`)?.value;
+    const sessionToken =
+      req.cookies.get(`mingle_session_${eventId}`)?.value ||
+      req.headers.get("x-guest-session");
     if (!sessionToken) {
       return NextResponse.json({ error: "Unauthorized session" }, { status: 401 });
     }
@@ -65,15 +67,18 @@ export async function GET(req: NextRequest) {
 // Save a captured photo
 export async function POST(req: NextRequest) {
   try {
-    const { eventId, s3ObjectKey, imageUrl } = await req.json();
+    const { eventId, s3ObjectKey, imageUrl, sessionToken: bodyToken } = await req.json();
 
     if (!eventId || !s3ObjectKey || !imageUrl) {
       return NextResponse.json({ error: "Missing required photo fields" }, { status: 400 });
     }
 
-    const sessionToken = req.cookies.get(`mingle_session_${eventId}`)?.value;
+    const sessionToken =
+      req.cookies.get(`mingle_session_${eventId}`)?.value ||
+      req.headers.get("x-guest-session") ||
+      bodyToken;
     if (!sessionToken) {
-      return NextResponse.json({ error: "Unauthorized session" }, { status: 401 });
+      return NextResponse.json({ error: "Unauthorized session. Please enter your name first!" }, { status: 401 });
     }
 
     const guest = await prisma.guest.findUnique({
@@ -130,7 +135,9 @@ export async function DELETE(req: NextRequest) {
       return NextResponse.json({ error: "Missing photoId or eventId" }, { status: 400 });
     }
 
-    const sessionToken = req.cookies.get(`mingle_session_${eventId}`)?.value;
+    const sessionToken =
+      req.cookies.get(`mingle_session_${eventId}`)?.value ||
+      req.headers.get("x-guest-session");
     if (!sessionToken) {
       return NextResponse.json({ error: "Unauthorized session" }, { status: 401 });
     }

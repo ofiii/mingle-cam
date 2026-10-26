@@ -43,6 +43,15 @@ export default function AdminDashboardPage() {
   const [actionMessage, setActionMessage] = useState<string | null>(null);
   const [confirmDeleteEvent, setConfirmDeleteEvent] = useState<EventItem | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [copiedEventId, setCopiedEventId] = useState<string | null>(null);
+
+  const handleCopyLink = (eventId: string) => {
+    if (typeof window === "undefined") return;
+    const fullUrl = `${window.location.origin}/${eventId}`;
+    navigator.clipboard.writeText(fullUrl);
+    setCopiedEventId(eventId);
+    setTimeout(() => setCopiedEventId(null), 2500);
+  };
 
   const fetchEvents = async () => {
     try {
@@ -451,13 +460,29 @@ export default function AdminDashboardPage() {
 
                     {/* Action Bar */}
                     <div className="flex items-center justify-between pt-2 border-t border-stone-800/80 text-xs">
-                      <Link
-                        href={guestUrl}
-                        target="_blank"
-                        className="text-stone-300 hover:text-[#d8a4cb] underline underline-offset-4 flex items-center space-x-1"
-                      >
-                        <span>Guest Link ↗</span>
-                      </Link>
+                      <div className="flex items-center space-x-2">
+                        <button
+                          onClick={() => handleCopyLink(event.id)}
+                          className={`px-2.5 py-1.5 rounded-xl text-xs font-semibold flex items-center space-x-1.5 border transition-all ${
+                            copiedEventId === event.id
+                              ? "bg-emerald-600 text-white border-emerald-500 shadow-md scale-105"
+                              : "bg-stone-800 hover:bg-stone-700 text-stone-200 border-stone-700"
+                          }`}
+                          title="Copy guest invite link for guests (WhatsApp, Instagram, etc)"
+                        >
+                          <span>{copiedEventId === event.id ? "✓" : "📋"}</span>
+                          <span>{copiedEventId === event.id ? "Copied!" : "Copy Guest Link"}</span>
+                        </button>
+
+                        <Link
+                          href={guestUrl}
+                          target="_blank"
+                          className="text-stone-400 hover:text-stone-200 text-xs hidden sm:flex items-center space-x-0.5"
+                          title="Open guest onboarding page"
+                        >
+                          <span>Open ↗</span>
+                        </Link>
+                      </div>
 
                       <div className="flex items-center space-x-2">
                         <Link

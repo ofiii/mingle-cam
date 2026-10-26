@@ -22,7 +22,17 @@ export default function GuestLandingPage({ params }: GuestLandingProps) {
   useEffect(() => {
     async function checkExistingSession() {
       try {
-        const res = await fetch(`/api/events/${eventId}`);
+        const localToken =
+          typeof window !== "undefined"
+            ? localStorage.getItem(`mingle_token_${eventId}`)
+            : null;
+
+        const headers: Record<string, string> = {};
+        if (localToken) {
+          headers["x-guest-session"] = localToken;
+        }
+
+        const res = await fetch(`/api/events/${eventId}`, { headers });
         if (!res.ok) {
           setError("Event not found or link is invalid.");
           setLoading(false);
@@ -68,6 +78,11 @@ export default function GuestLandingPage({ params }: GuestLandingProps) {
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
         throw new Error(data.error || "Failed to join event");
+      }
+
+      const data = await res.json();
+      if (data.guest?.sessionToken && typeof window !== "undefined") {
+        localStorage.setItem(`mingle_token_${eventId}`, data.guest.sessionToken);
       }
 
       router.push(`/${eventId}/camera`);

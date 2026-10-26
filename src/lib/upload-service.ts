@@ -14,11 +14,23 @@ export async function uploadFilteredPhotoToR2({
   eventId: string;
   blob: Blob;
 }): Promise<UploadResult> {
+  const localToken =
+    typeof window !== "undefined"
+      ? localStorage.getItem(`mingle_token_${eventId}`)
+      : null;
+
+  const authHeaders: Record<string, string> = {
+    "Content-Type": "application/json",
+  };
+  if (localToken) {
+    authHeaders["x-guest-session"] = localToken;
+  }
+
   // 1. Request presigned upload URL from Next.js API
   const urlRes = await fetch("/api/upload-url", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ eventId }),
+    headers: authHeaders,
+    body: JSON.stringify({ eventId, sessionToken: localToken }),
   });
 
   if (!urlRes.ok) {
@@ -52,8 +64,8 @@ export async function uploadFilteredPhotoToR2({
   // 3. Register finalized photo record in database
   const confirmRes = await fetch("/api/photos", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ eventId, s3ObjectKey, imageUrl }),
+    headers: authHeaders,
+    body: JSON.stringify({ eventId, s3ObjectKey, imageUrl, sessionToken: localToken }),
   });
 
   if (!confirmRes.ok) {

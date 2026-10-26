@@ -7,16 +7,24 @@ import crypto from "crypto";
 
 export async function POST(req: NextRequest) {
   try {
-    const { eventId } = await req.json();
+    const body = await req.json().catch(() => ({}));
+    const { eventId, sessionToken: bodyToken } = body;
 
     if (!eventId) {
       return NextResponse.json({ error: "Missing eventId" }, { status: 400 });
     }
 
-    // Verify session token from cookie
-    const sessionToken = req.cookies.get(`mingle_session_${eventId}`)?.value;
+    // Verify session token from cookie, header, or request body
+    const sessionToken =
+      req.cookies.get(`mingle_session_${eventId}`)?.value ||
+      req.headers.get("x-guest-session") ||
+      bodyToken;
+
     if (!sessionToken) {
-      return NextResponse.json({ error: "Unauthorized session" }, { status: 401 });
+      return NextResponse.json(
+        { error: "Unauthorized session. Please enter your name first!" },
+        { status: 401 }
+      );
     }
 
     const guest = await prisma.guest.findUnique({

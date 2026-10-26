@@ -2,6 +2,7 @@
 
 import React, { useState, useRef, useEffect, use, useCallback } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   EFFECT_PRESETS,
   FilterEffect,
@@ -23,6 +24,7 @@ interface GuestPhotoItem {
 
 export default function CameraPage({ params }: CameraPageProps) {
   const { eventId } = use(params);
+  const router = useRouter();
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -78,14 +80,35 @@ export default function CameraPage({ params }: CameraPageProps) {
     }
   }, []);
 
-  // Load event details and guest photo count on mount
+  // Load event details and verify guest session on mount
   useEffect(() => {
     let mounted = true;
 
-    fetch(`/api/events/${eventId}`)
-      .then((res) => res.json())
+    const localToken =
+      typeof window !== "undefined"
+        ? localStorage.getItem(`mingle_token_${eventId}`)
+        : null;
+
+    const headers: Record<string, string> = {};
+    if (localToken) {
+      headers["x-guest-session"] = localToken;
+    }
+
+    fetch(`/api/events/${eventId}`, { headers })
+      .then((res) => {
+        if (!res.ok) {
+          router.replace(`/${eventId}`);
+          return null;
+        }
+        return res.json();
+      })
       .then((data) => {
-        if (!mounted) return;
+        if (!mounted || !data) return;
+        // If guest has not registered or session is invalid, redirect to claim guest slot
+        if (!data.currentGuest) {
+          router.replace(`/${eventId}`);
+          return;
+        }
         if (data.event?.name) setEventName(data.event.name);
         if (data.event?.themeColor) setThemeColor(data.event.themeColor);
         if (data.event?.maxPhotosPerGuest) setMaxPhotosLimit(data.event.maxPhotosPerGuest);
@@ -96,7 +119,7 @@ export default function CameraPage({ params }: CameraPageProps) {
       .catch(() => {});
 
     // Fetch guest photos to populate initial last preview
-    fetch(`/api/photos?eventId=${eventId}`)
+    fetch(`/api/photos?eventId=${eventId}`, { headers })
       .then((res) => res.json())
       .then((data) => {
         if (!mounted) return;
@@ -112,7 +135,7 @@ export default function CameraPage({ params }: CameraPageProps) {
     return () => {
       mounted = false;
     };
-  }, [eventId]);
+  }, [eventId, router]);
 
   // Keep camera alive across visibility and focus changes
   useEffect(() => {
@@ -368,8 +391,18 @@ export default function CameraPage({ params }: CameraPageProps) {
         .catch((err) => {
           console.error("Background upload failed:", err);
           setPhotosTaken((prev) => Math.max(0, prev - 1));
-          setBannerText("Could not save photo. Please check your connection.");
-          setTimeout(() => setBannerText(null), 4000);
+          const errMsg = err?.message || "Could not save photo. Please check your connection.";
+          if (
+            errMsg.toLowerCase().includes("unauthorized") ||
+            errMsg.toLowerCase().includes("session") ||
+            errMsg.toLowerCase().includes("name first")
+          ) {
+            setBannerText("Please enter your name first!");
+            setTimeout(() => router.replace(`/${eventId}`), 1800);
+          } else {
+            setBannerText(errMsg);
+            setTimeout(() => setBannerText(null), 4000);
+          }
         });
     } catch (err: unknown) {
       console.error(err);
@@ -427,8 +460,18 @@ export default function CameraPage({ params }: CameraPageProps) {
         .catch((err) => {
           console.error("Background upload failed:", err);
           setPhotosTaken((prev) => Math.max(0, prev - 1));
-          setBannerText("Could not save photo. Please check your connection.");
-          setTimeout(() => setBannerText(null), 4000);
+          const errMsg = err?.message || "Could not save photo. Please check your connection.";
+          if (
+            errMsg.toLowerCase().includes("unauthorized") ||
+            errMsg.toLowerCase().includes("session") ||
+            errMsg.toLowerCase().includes("name first")
+          ) {
+            setBannerText("Please enter your name first!");
+            setTimeout(() => router.replace(`/${eventId}`), 1800);
+          } else {
+            setBannerText(errMsg);
+            setTimeout(() => setBannerText(null), 4000);
+          }
         });
     } catch (err: unknown) {
       console.error(err);

@@ -52,6 +52,7 @@ export async function POST(req: NextRequest) {
         id: guest.id,
         name: guest.name,
         eventId: guest.eventId,
+        sessionToken: guest.sessionToken,
       },
     });
 

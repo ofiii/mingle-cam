@@ -59,6 +59,12 @@ export default function CameraPage({ params }: CameraPageProps) {
   const [deletingPhotoId, setDeletingPhotoId] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
+  // Tap-to-Focus State
+  const [focusPoint, setFocusPoint] = useState<{ x: number; y: number } | null>(null);
+  const [focusPixel, setFocusPixel] = useState<{ x: number; y: number } | null>(null);
+  const [focusActive, setFocusActive] = useState<boolean>(false);
+  const focusTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
   // Helper to reliably resume video playback if mobile browser paused it
   const resumeCamera = useCallback(async () => {
     if (videoRef.current) {
@@ -234,6 +240,68 @@ export default function CameraPage({ params }: CameraPageProps) {
     }
   };
 
+  // Tap-to-Focus on Viewfinder Tap
+  const handleViewfinderTap = async (
+    e: React.MouseEvent<HTMLDivElement> | React.TouchEvent<HTMLDivElement>
+  ) => {
+    const target = e.target as HTMLElement;
+    if (target.closest("button") || isProcessing || isLimitReached) return;
+
+    const rect = e.currentTarget.getBoundingClientRect();
+    let clientX = 0;
+    let clientY = 0;
+
+    if ("touches" in e) {
+      if (e.touches.length === 0) return;
+      clientX = e.touches[0].clientX;
+      clientY = e.touches[0].clientY;
+    } else {
+      clientX = (e as React.MouseEvent).clientX;
+      clientY = (e as React.MouseEvent).clientY;
+    }
+
+    const relX = Math.max(0, Math.min(rect.width, clientX - rect.left));
+    const relY = Math.max(0, Math.min(rect.height, clientY - rect.top));
+
+    const normX = relX / rect.width;
+    const normY = relY / rect.height;
+
+    setFocusPoint({ x: normX, y: normY });
+    setFocusPixel({ x: relX, y: relY });
+    setFocusActive(true);
+
+    if (typeof window !== "undefined" && "vibrate" in navigator) {
+      navigator.vibrate(25);
+    }
+
+    // Instruct camera lens to adjust focus & exposure at tapped coordinate
+    if (stream && facingMode === "environment") {
+      try {
+        const track = stream.getVideoTracks()[0];
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const caps = track?.getCapabilities?.() as any;
+        if (caps?.focusMode?.includes("single-shot") || caps?.pointsOfInterest) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          await track.applyConstraints({
+            advanced: [
+              {
+                focusMode: "single-shot",
+                pointsOfInterest: [{ x: normX, y: normY }],
+              } as any,
+            ],
+          }).catch(() => {});
+        }
+      } catch {
+        // Fallback gracefully on Safari iOS
+      }
+    }
+
+    if (focusTimeoutRef.current) clearTimeout(focusTimeoutRef.current);
+    focusTimeoutRef.current = setTimeout(() => {
+      setFocusActive(false);
+    }, 1800);
+  };
+
   // Capture Photo in 3:4 Portrait
   const handleShutter = async () => {
     if (isProcessing || isLimitReached) return;
@@ -253,13 +321,14 @@ export default function CameraPage({ params }: CameraPageProps) {
       let previewUrl: string;
 
       if (videoRef.current && cameraReady && !cameraError) {
-        // Instant capture from live 3:4 portrait frame with current zoom and xenon flash
+        // Instant capture from live 3:4 portrait frame with current zoom, xenon flash & focus point
         const result = await captureVideoFrame(
           videoRef.current,
           selectedEffect,
           facingMode === "user",
           zoomLevel,
-          flashMode === "on"
+          flashMode === "on",
+          focusPoint
         );
         blob = result.blob;
         previewUrl = result.previewUrl;
@@ -321,7 +390,12 @@ export default function CameraPage({ params }: CameraPageProps) {
       await triggerFlashBurst();
 
       setStatusMessage("Developing analog film...");
-      const { blob, previewUrl } = await applyAnalogFilter(file, selectedEffect, flashMode === "on");
+      const { blob, previewUrl } = await applyAnalogFilter(
+        file,
+        selectedEffect,
+        flashMode === "on",
+        focusPoint
+      );
       setLastPreview(previewUrl);
 
       const newCount = photosTaken + 1;
@@ -498,8 +572,12 @@ export default function CameraPage({ params }: CameraPageProps) {
           </span>
         </div>
 
-        {/* 3:4 PORTRAIT Viewfinder Window */}
-        <div className="w-full aspect-[3/4] max-h-[55vh] bg-black rounded-2xl border-4 border-black/40 relative flex items-center justify-center overflow-hidden shadow-inner">
+        {/* 3:4 PORTRAIT Viewfinder Window with Tap-to-Focus */}
+        <div
+          onClick={handleViewfinderTap}
+          onTouchStart={handleViewfinderTap}
+          className="w-full aspect-[3/4] max-h-[55vh] bg-black rounded-2xl border-4 border-black/40 relative flex items-center justify-center overflow-hidden shadow-inner cursor-crosshair select-none"
+        >
           {/* Live Video Feed with Filter Preview & Zoom scale */}
           <video
             ref={videoRef}
@@ -538,6 +616,28 @@ export default function CameraPage({ params }: CameraPageProps) {
             <div className="w-3.5 h-3.5 border-b-2 border-r-2 border-white/40 absolute bottom-0 right-0 rounded-br-sm" />
             <div className="w-1.5 h-1.5 rounded-full bg-white/20" />
           </div>
+
+          {/* Interactive Tap-to-Focus Reticle with Corners & Center Dot */}
+          {focusActive && focusPixel && (
+            <div
+              key={`${focusPixel.x}-${focusPixel.y}`}
+              className="absolute pointer-events-none z-30 transition-opacity duration-300"
+              style={{
+                left: `${focusPixel.x}px`,
+                top: `${focusPixel.y}px`,
+                transform: "translate(-50%, -50%)",
+              }}
+            >
+              <div className="w-14 h-14 rounded-xl border-2 border-amber-400 shadow-[0_0_12px_rgba(251,191,36,0.6)] flex items-center justify-center animate-focus-reticle relative">
+                <span className="w-1.5 h-1.5 rounded-full bg-amber-400 shadow" />
+                {/* 4 Corner tick marks */}
+                <div className="absolute -top-1 left-2 right-2 h-0.5 bg-amber-300/80 rounded" />
+                <div className="absolute -bottom-1 left-2 right-2 h-0.5 bg-amber-300/80 rounded" />
+                <div className="absolute -left-1 top-2 bottom-2 w-0.5 bg-amber-300/80 rounded" />
+                <div className="absolute -right-1 top-2 bottom-2 w-0.5 bg-amber-300/80 rounded" />
+              </div>
+            </div>
+          )}
 
           {/* Preset Label Badge */}
           <div className="absolute top-2.5 left-2.5 px-2.5 py-1 rounded-md bg-black/60 backdrop-blur-sm text-[11px] font-medium text-stone-200 pointer-events-none">

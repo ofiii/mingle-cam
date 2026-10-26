@@ -131,7 +131,8 @@ export async function captureVideoFrame(
   effect: FilterEffect = "signature",
   isFrontCamera: boolean = false,
   zoomLevel: number = 1,
-  hasFlash: boolean = false
+  hasFlash: boolean = false,
+  focusPoint?: { x: number; y: number } | null
 ): Promise<FilterResult> {
   const videoWidth = video.videoWidth || 1080;
   const videoHeight = video.videoHeight || 1440;
@@ -191,7 +192,15 @@ export async function captureVideoFrame(
 
   // Permanently bake vintage color grading, flash burst & grain into pixel buffer
   const preset = getEffectPreset(effect);
-  applyPixelColorGradingAndGrain(ctx, outputWidth, outputHeight, effect, preset.grainAmount, hasFlash);
+  applyPixelColorGradingAndGrain(
+    ctx,
+    outputWidth,
+    outputHeight,
+    effect,
+    preset.grainAmount,
+    hasFlash,
+    focusPoint
+  );
 
   // Convert to high-quality JPEG Blob (0.86 quality = crisp detail, 4x faster export & upload)
   const blob = await new Promise<Blob>((resolve, reject) => {
@@ -215,7 +224,8 @@ export async function captureVideoFrame(
 export async function applyAnalogFilter(
   file: File,
   effect: FilterEffect = "signature",
-  hasFlash: boolean = false
+  hasFlash: boolean = false,
+  focusPoint?: { x: number; y: number } | null
 ): Promise<FilterResult> {
   const maxDimension = 1440;
   const imageBitmap = await createImageBitmap(file);
@@ -261,7 +271,15 @@ export async function applyAnalogFilter(
   imageBitmap.close();
 
   const preset = getEffectPreset(effect);
-  applyPixelColorGradingAndGrain(ctx, outputWidth, outputHeight, effect, preset.grainAmount, hasFlash);
+  applyPixelColorGradingAndGrain(
+    ctx,
+    outputWidth,
+    outputHeight,
+    effect,
+    preset.grainAmount,
+    hasFlash,
+    focusPoint
+  );
 
   const blob = await new Promise<Blob>((resolve, reject) => {
     canvas.toBlob(
@@ -288,7 +306,8 @@ function applyPixelColorGradingAndGrain(
   height: number,
   effect: FilterEffect,
   grainAmount: number,
-  hasFlash: boolean = false
+  hasFlash: boolean = false,
+  focusPoint?: { x: number; y: number } | null
 ) {
   try {
     const imgData = ctx.getImageData(0, 0, width, height);
@@ -500,8 +519,11 @@ function applyPixelColorGradingAndGrain(
       // Authentic Disposable Camera Xenon Flash Light Model (Additive Illumination)
       if (hasFlash) {
         const pixelIdx = i >> 2;
-        const px = (pixelIdx % width) - (width * 0.5);
-        const py = ((pixelIdx / width) | 0) - (height * 0.44);
+        const targetCenterX = focusPoint ? focusPoint.x * width : width * 0.5;
+        const targetCenterY = focusPoint ? focusPoint.y * height : height * 0.44;
+
+        const px = (pixelIdx % width) - targetCenterX;
+        const py = ((pixelIdx / width) | 0) - targetCenterY;
 
         // Distance from center flash position
         const distNorm = Math.sqrt((px * px) / (width * width * 0.25) + (py * py) / (height * height * 0.25));

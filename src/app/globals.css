@@ -24,3 +24,26 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+@keyframes focusRing {
+  0% {
+    transform: scale(1.4);
+    opacity: 0.7;
+  }
+  35% {
+    transform: scale(1.0);
+    opacity: 1;
+  }
+  65% {
+    transform: scale(1.06);
+    opacity: 0.9;
+  }
+  100% {
+    transform: scale(1.0);
+    opacity: 0.85;
+  }
+}
+
+.animate-focus-reticle {
+  animation: focusRing 0.35s cubic-bezier(0.2, 0.9, 0.3, 1) forwards;
+}

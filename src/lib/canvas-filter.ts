@@ -301,6 +301,44 @@ function applyPixelColorGradingAndGrain(
       let g = d[i + 1];
       let b = d[i + 2];
 
+      // 1. Direct Xenon Flash Optical Illumination (Applied BEFORE color grading, mirroring physical flash photography)
+      if (hasFlash) {
+        const pixelIdx = i >> 2;
+        const targetCenterX = focusPoint ? focusPoint.x * width : width * 0.5;
+        const targetCenterY = focusPoint ? focusPoint.y * height : height * 0.44;
+
+        const px = (pixelIdx % width) - targetCenterX;
+        const py = ((pixelIdx / width) | 0) - targetCenterY;
+
+        // Normalized radial distance from the flash center
+        const distNorm = Math.sqrt((px * px) / (width * width * 0.35) + (py * py) / (height * height * 0.35));
+
+        // Natural flash falloff: crisp and bright at center, natural gentle dropoff towards outer vignette
+        const falloff = Math.max(0.38, 1.0 - Math.min(1.0, distNorm) * 0.52);
+
+        // Pre-flash luminance
+        const rawLum = 0.299 * r + 0.587 * g + 0.114 * b;
+
+        // Darkness factor: 1.0 in dark rooms (<25 lum), smoothly tapering to 0 in bright day (>160 lum)
+        const darkness = Math.max(0, Math.min(1.0, (160 - rawLum) / 160));
+
+        // Adaptive Flash Exposure Gain: lifts dark subject up to 3.2x in low light
+        const flashGain = 1.0 + (2.2 * darkness + 0.12) * falloff;
+
+        // Direct Xenon Burst Bounce: injects frontal light illumination into dark scenes
+        const flashBurst = (85 * darkness + 6) * falloff;
+
+        r = r * flashGain + flashBurst;
+        g = g * flashGain + flashBurst;
+        b = b * flashGain + flashBurst;
+
+        // Film Highlight Shoulder Roll-off (prevents harsh digital clipping > 235)
+        if (r > 235) r = 235 + (r - 235) * 0.40;
+        if (g > 235) g = 235 + (g - 235) * 0.40;
+        if (b > 235) b = 235 + (b - 235) * 0.40;
+      }
+
+      // Calculate post-flash luminance and shadow factor for analog film grading
       const lum = 0.299 * r + 0.587 * g + 0.114 * b;
       const shadowFactor = Math.max(0, 1 - lum / 160);
 
@@ -494,53 +532,6 @@ function applyPixelColorGradingAndGrain(
           b = mono;
           break;
         }
-      }
-
-      // Authentic Disposable / Point-and-Shoot Direct Flash Model (Balanced illumination & highlight protection)
-      if (hasFlash) {
-        const pixelIdx = i >> 2;
-        const targetCenterX = focusPoint ? focusPoint.x * width : width * 0.5;
-        const targetCenterY = focusPoint ? focusPoint.y * height : height * 0.44;
-
-        const px = (pixelIdx % width) - targetCenterX;
-        const py = ((pixelIdx / width) | 0) - targetCenterY;
-
-        // Normalized radial distance from the flash center
-        const distNorm = Math.sqrt((px * px) / (width * width * 0.28) + (py * py) / (height * height * 0.28));
-
-        // Natural flash falloff: crisp at center subject, gentle natural drop towards edges
-        // (Clamped between 0.35 at perimeter to 1.0 at center)
-        const falloff = Math.max(0.35, 1.0 - Math.min(1.0, distNorm) * 0.50);
-
-        // 1. Soft Fill: gently lifts underexposed shadows without blowing out midtones
-        // Deep dark shadows (lum < 90) get a gentle lift of up to +16
-        const shadowFill = Math.max(0, (90 - lum) / 90) * 16 * falloff;
-
-        // 2. Subtle Subject Illumination (Gentle +10 at center, tapering off as brightness increases)
-        // Highlight protection: scales down to 0 at lum 200 so highlights never clip
-        const highlightProtection = Math.max(0, 1.0 - lum / 200);
-        const gentleFlashFill = 10 * falloff * highlightProtection;
-
-        // 3. Balanced Exposure Factor (gentle 1.06x at center subject, 0.98x at deep edges)
-        const exposureScale = 0.98 + 0.08 * falloff;
-
-        r = r * exposureScale + shadowFill + gentleFlashFill;
-        g = g * exposureScale + shadowFill + gentleFlashFill;
-        b = b * exposureScale + shadowFill + gentleFlashFill;
-
-        // 4. Subtle catchlight / specular gleam on glossy reflections only (lum > 190), max +4
-        if (lum > 190) {
-          const specCatch = Math.min(4, (lum - 190) * 0.06 * falloff);
-          r += specCatch * 1.02;
-          g += specCatch;
-          b += specCatch * 1.04;
-        }
-
-        // 5. Film Highlight Shoulder Roll-off (prevents harsh digital clipping > 225)
-        // Smoothly rolls off highlight peaks to preserve rich skin tones and texture
-        if (r > 225) r = 225 + (r - 225) * 0.42;
-        if (g > 225) g = 225 + (g - 225) * 0.42;
-        if (b > 225) b = 225 + (b - 225) * 0.42;
       }
 
       // Add analog film grain directly in the same single loop

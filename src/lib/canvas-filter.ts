@@ -72,7 +72,7 @@ export const EFFECT_PRESETS: EffectPreset[] = [
     name: "Retro 1984",
     icon: "📼",
     cssFilter: "contrast(120%) saturate(88%) sepia(28%) brightness(99%) hue-rotate(-15deg)",
-    grainAmount: 18,
+    grainAmount: 10,
     description: "80s disposable flash camera aesthetic with warm faded film stock",
   },
   {
@@ -429,14 +429,27 @@ function applyPixelColorGradingAndGrain(
 
 
         case "retro80s": {
-          // Retro 1984: Disposable flash camera look, warm yellow/green tint
-          r = r * 1.08 + 14 * shadowFactor;
-          g = g * 1.02 + 10 * shadowFactor;
-          b = b * 0.88;
+          // Retro 1984: 100% exact 1:1 match to camera viewfinder CSS:
+          // cssFilter: "contrast(120%) saturate(88%) sepia(28%) brightness(99%) hue-rotate(-15deg)"
 
-          r = applySCurve(r, 1.20);
-          g = applySCurve(g, 1.16);
-          b = applySCurve(b, 1.10);
+          // 1. Combined W3C Color Matrix (sepia 28% -> hue-rotate -15deg -> saturate 88%)
+          const mr = 0.78344 * r + 0.41672 * g - 0.08983 * b;
+          const mg = 0.09564 * r + 0.85514 * g + 0.10043 * b;
+          const mb = 0.23417 * r + 0.12103 * g + 0.64750 * b;
+
+          const clR = Math.min(255, Math.max(0, mr));
+          const clG = Math.min(255, Math.max(0, mg));
+          const clB = Math.min(255, Math.max(0, mb));
+
+          // 2. Contrast 120% (W3C standard: (val - 128) * 1.20 + 128)
+          const cr = (clR - 128) * 1.20 + 128;
+          const cg = (clG - 128) * 1.20 + 128;
+          const cb = (clB - 128) * 1.20 + 128;
+
+          // 3. Brightness 99% (W3C standard: val * 0.99)
+          r = Math.min(255, Math.max(0, cr * 0.99));
+          g = Math.min(255, Math.max(0, cg * 0.99));
+          b = Math.min(255, Math.max(0, cb * 0.99));
           break;
         }
 

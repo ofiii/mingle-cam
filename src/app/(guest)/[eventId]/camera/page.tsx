@@ -19,6 +19,7 @@ interface CameraPageProps {
 interface GuestPhotoItem {
   id: string;
   imageUrl: string;
+  previewUrl?: string;
   createdAt: string;
 }
 
@@ -100,16 +101,29 @@ export default function CameraPage({ params }: CameraPageProps) {
 
       if (!res.ok) return;
       const data = await res.json();
-      if (data.photos) {
-        setMyPhotos(data.photos);
-        if (data.photos.length > 0) {
-          setLastPreview(data.photos[0].imageUrl);
-        } else {
-          setLastPreview(null);
-        }
+      if (data.photos && Array.isArray(data.photos)) {
+        setMyPhotos((prev) => {
+          // Keep in-flight optimistic uploads (temp-*)
+          const pending = prev.filter((p) => p.id.startsWith("temp-"));
+
+          // Map server photos and preserve any in-memory previewUrl so images don't re-fetch
+          const serverPhotos: GuestPhotoItem[] = data.photos.map((sp: GuestPhotoItem) => {
+            const existing = prev.find((ep) => ep.id === sp.id);
+            return existing?.previewUrl ? { ...sp, previewUrl: existing.previewUrl } : sp;
+          });
+
+          // Pending uploads always stay on top
+          return pending.length > 0 ? [...pending, ...serverPhotos] : serverPhotos;
+        });
+
+        // Retain lastPreview if already showing an in-memory blob or current photo
+        setLastPreview((prev) => {
+          if (prev) return prev;
+          return data.photos.length > 0 ? data.photos[0].imageUrl : null;
+        });
       }
       if (data.photoCount !== undefined) {
-        setPhotosTaken(data.photoCount);
+        setPhotosTaken((prev) => Math.max(prev, data.photoCount));
       }
       if (data.maxPhotos) {
         setMaxPhotosLimit(data.maxPhotos);
@@ -395,6 +409,7 @@ export default function CameraPage({ params }: CameraPageProps) {
       const optimisticPhoto: GuestPhotoItem = {
         id: tempId,
         imageUrl: previewUrl,
+        previewUrl,
         createdAt: new Date().toISOString(),
       };
 
@@ -419,16 +434,15 @@ export default function CameraPage({ params }: CameraPageProps) {
       // Background upload to Cloudflare R2
       uploadFilteredPhotoToR2({ eventId, blob })
         .then((result) => {
-          // Replace temp item with confirmed item and persistent R2 URL
+          // Replace temp item with confirmed item while preserving the previewUrl in memory!
           setMyPhotos((prev) =>
             prev.map((item) =>
               item.id === tempId
-                ? { ...item, id: result.photoId, imageUrl: result.imageUrl }
+                ? { ...item, id: result.photoId, imageUrl: result.imageUrl, previewUrl }
                 : item
             )
           );
-          setLastPreview((prev) => (prev === previewUrl ? result.imageUrl : prev));
-          // Refresh from server to keep counts completely pristine
+          setLastPreview((prev) => (prev ? prev : result.imageUrl));
           refreshPhotos();
         })
         .catch((err) => {
@@ -436,7 +450,11 @@ export default function CameraPage({ params }: CameraPageProps) {
           // Rollback optimistic additions on error
           setMyPhotos((prev) => {
             const reverted = prev.filter((item) => item.id !== tempId);
-            setLastPreview(reverted.length > 0 ? reverted[0].imageUrl : null);
+            setLastPreview(
+              reverted.length > 0
+                ? reverted[0].previewUrl || reverted[0].imageUrl
+                : null
+            );
             return reverted;
           });
           setPhotosTaken((prev) => Math.max(0, prev - 1));
@@ -483,6 +501,7 @@ export default function CameraPage({ params }: CameraPageProps) {
       const optimisticPhoto: GuestPhotoItem = {
         id: tempId,
         imageUrl: previewUrl,
+        previewUrl,
         createdAt: new Date().toISOString(),
       };
 
@@ -508,15 +527,15 @@ export default function CameraPage({ params }: CameraPageProps) {
       // Background upload to Cloudflare R2
       uploadFilteredPhotoToR2({ eventId, blob })
         .then((result) => {
-          // Replace temp item with confirmed item and persistent R2 URL
+          // Replace temp item with confirmed item while preserving the previewUrl in memory!
           setMyPhotos((prev) =>
             prev.map((item) =>
               item.id === tempId
-                ? { ...item, id: result.photoId, imageUrl: result.imageUrl }
+                ? { ...item, id: result.photoId, imageUrl: result.imageUrl, previewUrl }
                 : item
             )
           );
-          setLastPreview((prev) => (prev === previewUrl ? result.imageUrl : prev));
+          setLastPreview((prev) => (prev ? prev : result.imageUrl));
           refreshPhotos();
         })
         .catch((err) => {
@@ -524,7 +543,11 @@ export default function CameraPage({ params }: CameraPageProps) {
           // Rollback optimistic additions on error
           setMyPhotos((prev) => {
             const reverted = prev.filter((item) => item.id !== tempId);
-            setLastPreview(reverted.length > 0 ? reverted[0].imageUrl : null);
+            setLastPreview(
+              reverted.length > 0
+                ? reverted[0].previewUrl || reverted[0].imageUrl
+                : null
+            );
             return reverted;
           });
           setPhotosTaken((prev) => Math.max(0, prev - 1));
@@ -551,15 +574,12 @@ export default function CameraPage({ params }: CameraPageProps) {
     }
   };
 
-  // Open My Photos modal with real-time freshness
-  const handleOpenMyPhotos = async () => {
+  // Open My Photos modal instantly with zero flicker
+  const handleOpenMyPhotos = () => {
     setShowMyPhotosModal(true);
     setConfirmDeleteId(null);
-    if (myPhotos.length === 0) {
-      setLoadingMyPhotos(true);
-    }
-    await refreshPhotos();
     setLoadingMyPhotos(false);
+    refreshPhotos();
   };
 
   // Close My Photos modal and ensure live camera feed resumes immediately
@@ -601,7 +621,11 @@ export default function CameraPage({ params }: CameraPageProps) {
       setMyPhotos(updatedList);
       setPhotosTaken(data.photoCount);
       // Synchronize Last Photo thumbnail in real time
-      setLastPreview(updatedList.length > 0 ? updatedList[0].imageUrl : null);
+      setLastPreview(
+        updatedList.length > 0
+          ? updatedList[0].previewUrl || updatedList[0].imageUrl
+          : null
+      );
       setConfirmDeleteId(null);
 
       setBannerText(`Photo deleted! You now have ${data.remainingPhotos} shots left.`);
@@ -981,7 +1005,7 @@ export default function CameraPage({ params }: CameraPageProps) {
                         <div className="w-full aspect-[3/4] rounded-xl overflow-hidden bg-black relative">
                           {/* eslint-disable-next-line @next/next/no-img-element */}
                           <img
-                            src={photo.imageUrl}
+                            src={photo.previewUrl || photo.imageUrl}
                             alt={`Shot #${myPhotos.length - index}`}
                             className="w-full h-full object-cover"
                           />

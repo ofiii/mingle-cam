@@ -594,11 +594,32 @@ export default function CameraPage({ params }: CameraPageProps) {
     }, 60);
   };
 
-  // Delete a photo owned by this guest (with smooth in-modal confirmation)
+  // Delete a photo owned by this guest (instant optimistic response with background sync)
   const handleDeletePhoto = async (photoId: string) => {
-    try {
-      setDeletingPhotoId(photoId);
+    // 1. Snapshot previous state for rollback on error
+    const previousPhotos = [...myPhotos];
+    const previousCount = photosTaken;
+    const previousPreview = lastPreview;
 
+    // 2. Instant optimistic deletion (0ms delay)
+    const updatedList = myPhotos.filter((p) => p.id !== photoId);
+    setMyPhotos(updatedList);
+    const newPhotosCount = Math.max(0, photosTaken - 1);
+    setPhotosTaken(newPhotosCount);
+    setLastPreview(
+      updatedList.length > 0
+        ? updatedList[0].previewUrl || updatedList[0].imageUrl
+        : null
+    );
+    setConfirmDeleteId(null);
+    setDeletingPhotoId(null);
+
+    const remaining = Math.max(0, maxPhotosLimit - newPhotosCount);
+    setBannerText(`Photo deleted! You now have ${remaining} shots left.`);
+    setTimeout(() => setBannerText(null), 3000);
+
+    // 3. Background server synchronization
+    try {
       const localToken =
         typeof window !== "undefined"
           ? localStorage.getItem(`mingle_token_${eventId}`)
@@ -617,24 +638,17 @@ export default function CameraPage({ params }: CameraPageProps) {
       }
 
       const data = await res.json();
-      const updatedList = myPhotos.filter((p) => p.id !== photoId);
-      setMyPhotos(updatedList);
-      setPhotosTaken(data.photoCount);
-      // Synchronize Last Photo thumbnail in real time
-      setLastPreview(
-        updatedList.length > 0
-          ? updatedList[0].previewUrl || updatedList[0].imageUrl
-          : null
-      );
-      setConfirmDeleteId(null);
-
-      setBannerText(`Photo deleted! You now have ${data.remainingPhotos} shots left.`);
-      setTimeout(() => setBannerText(null), 3500);
+      if (data.photoCount !== undefined) {
+        setPhotosTaken(data.photoCount);
+      }
     } catch (err: unknown) {
-      alert((err as Error).message || "Error deleting photo");
+      console.error("Delete failed, reverting state:", err);
+      // Revert optimistic changes on failure
+      setMyPhotos(previousPhotos);
+      setPhotosTaken(previousCount);
+      setLastPreview(previousPreview);
+      alert((err as Error).message || "Error deleting photo. Please try again.");
     } finally {
-      setDeletingPhotoId(null);
-      // Ensure camera stays active in background
       resumeCamera();
     }
   };

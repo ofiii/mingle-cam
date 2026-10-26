@@ -171,15 +171,17 @@ export async function DELETE(req: NextRequest) {
       where: { id: photoId },
     });
 
-    // Delete object from Cloudflare R2
+    // Delete object from Cloudflare R2 non-blocking in the background
     try {
       const r2 = getR2Client();
-      await r2.send(
+      r2.send(
         new DeleteObjectCommand({
           Bucket: R2_BUCKET_NAME,
           Key: photo.s3ObjectKey,
         })
-      );
+      ).catch((r2Err) => {
+        console.warn("Could not delete object from R2:", r2Err);
+      });
     } catch (r2Err) {
       console.warn("Could not delete object from R2:", r2Err);
     }

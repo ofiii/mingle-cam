@@ -255,17 +255,26 @@ export default function CameraPage({ params }: CameraPageProps) {
 
     async function setupCamera() {
       try {
-        const constraints: MediaStreamConstraints = {
-          video: {
-            facingMode: { ideal: facingMode },
-            width: { ideal: 1080 },
-            height: { ideal: 1440 },
-            aspectRatio: { ideal: 3 / 4 },
-          },
-          audio: false,
-        };
-
-        const mediaStream = await navigator.mediaDevices.getUserMedia(constraints);
+        let mediaStream: MediaStream;
+        try {
+          mediaStream = await navigator.mediaDevices.getUserMedia({
+            video: {
+              facingMode: { ideal: facingMode },
+              width: { min: 1080, ideal: 1920 },
+              height: { min: 720, ideal: 1440 },
+            },
+            audio: false,
+          });
+        } catch {
+          mediaStream = await navigator.mediaDevices.getUserMedia({
+            video: {
+              facingMode: { ideal: facingMode },
+              width: { ideal: 1920 },
+              height: { ideal: 1080 },
+            },
+            audio: false,
+          });
+        }
         if (!active) {
           mediaStream.getTracks().forEach((t) => t.stop());
           return;
@@ -365,6 +374,11 @@ export default function CameraPage({ params }: CameraPageProps) {
     const target = e.target as HTMLElement;
     if (target.closest("button") || isProcessing || isLimitReached) return;
 
+    // Immediately resume video if Safari ever tries to pause on touch
+    if (videoRef.current && videoRef.current.paused) {
+      videoRef.current.play().catch(() => {});
+    }
+
     const rect = e.currentTarget.getBoundingClientRect();
     let clientX = 0;
     let clientY = 0;
@@ -430,6 +444,9 @@ export default function CameraPage({ params }: CameraPageProps) {
 
     // Flash trigger
     await triggerFlashBurst();
+    if (flashMode === "on") {
+      await new Promise((r) => setTimeout(r, 60));
+    }
 
     try {
       setIsProcessing(true);
@@ -818,7 +835,9 @@ export default function CameraPage({ params }: CameraPageProps) {
 
         {/* 3:4 PORTRAIT Viewfinder Window */}
         <div
-          className="w-full aspect-[3/4] max-h-[55vh] bg-black rounded-2xl border-4 border-black/40 relative flex items-center justify-center overflow-hidden shadow-inner select-none pointer-events-none"
+          onClick={handleViewfinderTap}
+          onTouchStart={handleViewfinderTap}
+          className="w-full aspect-[3/4] max-h-[55vh] bg-black rounded-2xl border-4 border-black/40 relative flex items-center justify-center overflow-hidden shadow-inner select-none cursor-crosshair touch-manipulation"
         >
           {/* Live Video Feed with Filter Preview & Zoom scale */}
           <video
@@ -829,6 +848,11 @@ export default function CameraPage({ params }: CameraPageProps) {
             controls={false}
             disablePictureInPicture
             disableRemotePlayback
+            onPause={() => {
+              if (!cameraError && stream) {
+                videoRef.current?.play().catch(() => {});
+              }
+            }}
             style={{
               filter: currentPreset.cssFilter,
               transform: `${facingMode === "user" ? "scaleX(-1) " : ""}scale(${zoomLevel})`,
@@ -861,6 +885,28 @@ export default function CameraPage({ params }: CameraPageProps) {
             <div className="w-3.5 h-3.5 border-b-2 border-r-2 border-white/40 absolute bottom-0 right-0 rounded-br-sm" />
             <div className="w-1.5 h-1.5 rounded-full bg-white/20" />
           </div>
+
+          {/* Interactive Tap-to-Focus Reticle */}
+          {focusActive && focusPixel && (
+            <div
+              key={`${focusPixel.x}-${focusPixel.y}`}
+              className="absolute pointer-events-none z-30 transition-opacity duration-300"
+              style={{
+                left: `${focusPixel.x}px`,
+                top: `${focusPixel.y}px`,
+                transform: "translate(-50%, -50%)",
+              }}
+            >
+              <div className="w-14 h-14 rounded-xl border-2 border-amber-400 shadow-[0_0_15px_rgba(251,191,36,0.7)] flex items-center justify-center animate-focus-reticle relative">
+                <span className="w-1.5 h-1.5 rounded-full bg-amber-400 shadow" />
+                {/* 4 Corner tick marks */}
+                <div className="absolute -top-1 left-2 right-2 h-0.5 bg-amber-300/80 rounded" />
+                <div className="absolute -bottom-1 left-2 right-2 h-0.5 bg-amber-300/80 rounded" />
+                <div className="absolute -left-1 top-2 bottom-2 w-0.5 bg-amber-300/80 rounded" />
+                <div className="absolute -right-1 top-2 bottom-2 w-0.5 bg-amber-300/80 rounded" />
+              </div>
+            </div>
+          )}
 
           {/* Preset Label Badge */}
           <div className="absolute top-2.5 left-2.5 px-2.5 py-1 rounded-md bg-black/60 backdrop-blur-sm text-[11px] font-medium text-stone-200 pointer-events-none">

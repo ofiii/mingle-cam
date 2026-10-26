@@ -162,6 +162,8 @@ export async function captureVideoFrame(
   }
 
   ctx.save();
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = "high";
   // Mirror selfie if front camera
   if (isFrontCamera) {
     ctx.translate(outputWidth, 0);
@@ -184,7 +186,7 @@ export async function captureVideoFrame(
     focusPoint
   );
 
-  // Convert to high-quality JPEG Blob (0.86 quality = crisp detail, 4x faster export & upload)
+  // Convert to high-quality JPEG Blob (0.92 quality for crisp analog resolution & detail)
   const blob = await new Promise<Blob>((resolve, reject) => {
     canvas.toBlob(
       (b) => {
@@ -192,7 +194,7 @@ export async function captureVideoFrame(
         else reject(new Error("Canvas export failed"));
       },
       "image/jpeg",
-      0.86
+      0.92
     );
   });
 
@@ -322,32 +324,43 @@ function applyPixelColorGradingAndGrain(
         // Pre-flash luminance
         const rawLum = 0.299 * r + 0.587 * g + 0.114 * b;
 
-        // Darkness factor: 1.0 in low light (<30 lum), tapering to 0 in well-lit scenes (>120 lum)
-        const darkness = Math.max(0, Math.min(1.0, (120 - rawLum) / 120));
+        // Darkness factor: 1.0 in low light (<30 lum), tapering to 0 in well-lit scenes (>130 lum)
+        const darkness = Math.max(0, Math.min(1.0, (130 - rawLum) / 130));
 
-        if (darkness > 0.05) {
+        if (darkness > 0.05 && rawLum > 3) {
           // --- LOW-LIGHT / DARK SCENE FLASH MODEL ---
-          // Powerful xenon exposure gain + surface bounce lifts subject out of darkness
-          const flashGain = 1.0 + 3.6 * darkness * falloff;
-          const reflectance = Math.min(1.0, Math.max(0, (rawLum - 3) / 18));
-          const xenonBounce = 105 * darkness * falloff * reflectance;
+          // Smooth photographic exposure curve: lifts subjects with rich, saturated, natural colors
+          // Preserves hue and saturation without washing out into chalk or boosting sensor noise
+          const norm = Math.min(1.0, rawLum / 130);
+          const targetLum = (Math.pow(norm, 0.36) * 190 + 20) * falloff;
+          const blendLum = rawLum * (1.0 - darkness) + targetLum * darkness;
 
-          r = r * flashGain + xenonBounce;
-          g = g * flashGain + xenonBounce;
-          b = b * flashGain + xenonBounce;
+          const scale = blendLum / Math.max(1, rawLum);
+          const safeScale = Math.min(6.5, scale);
 
-          // Preserve deep black void background (no milky gray fog)
-          const postLum = 0.299 * r + 0.587 * g + 0.114 * b;
-          if (postLum < 24) {
-            const toe = (24 - postLum) / 24;
-            r = r * (1.0 - toe * 0.65);
-            g = g * (1.0 - toe * 0.65);
-            b = b * (1.0 - toe * 0.65);
+          r = r * safeScale;
+          g = g * safeScale;
+          b = b * safeScale;
+
+          // Gentle warm xenon flash characteristic (5400K natural warmth)
+          r *= 1.03;
+          b *= 0.97;
+
+          // Chroma de-noising in deep shadows (cleans up ugly green/magenta digital sensor noise)
+          const currentLum = 0.299 * r + 0.587 * g + 0.114 * b;
+          if (currentLum < 38) {
+            const desat = ((38 - currentLum) / 38) * 0.45;
+            r = r * (1 - desat) + currentLum * desat;
+            g = g * (1 - desat) + currentLum * desat;
+            b = b * (1 - desat) + currentLum * desat;
           }
+        } else if (darkness > 0.05 && rawLum <= 3) {
+          // Keep pure background void deep velvety black (zero noise fog)
+          r *= 0.75;
+          g *= 0.75;
+          b *= 0.75;
         } else {
           // --- BRIGHT SCENE FLASH MODEL (DAYLIGHT / LIT ROOMS) ---
-          // Subtle fill-in flash ONLY in deep crevices/shadows (<70 lum).
-          // Zero addition to bright areas to prevent overexposure/clipping.
           const shadowFill = Math.max(0, (70 - rawLum) / 70) * 8 * falloff;
           r += shadowFill;
           g += shadowFill;
@@ -557,8 +570,10 @@ function applyPixelColorGradingAndGrain(
       }
 
       // Add analog film grain directly in the same single loop
-      if (grainAmount > 0) {
-        const noise = (Math.random() - 0.5) * grainAmount;
+      // When flash is active, reduce synthetic grain so the image stays crisp and detailed
+      const activeGrain = hasFlash ? grainAmount * 0.35 : grainAmount;
+      if (activeGrain > 0) {
+        const noise = (Math.random() - 0.5) * activeGrain;
         r += noise;
         g += noise;
         b += noise;

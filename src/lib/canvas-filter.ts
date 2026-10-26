@@ -302,8 +302,9 @@ function applyPixelColorGradingAndGrain(
       let b = d[i + 2];
 
       // 1. Authentic Optical Disposable Flash Model
-      // Dark scenes: uses gamma lift & reflectance bounce so true blacks STAY deep black (no foggy gray haze)
-      // Bright scenes: zero boost on highlights to strictly eliminate overexposure & blown-out clipping
+      // Dark scenes: powerful xenon flash illumination lifts foreground subjects (flowers, faces)
+      // while preserving deep black voids and preventing milky gray fog.
+      // Bright scenes: zero boost on highlights to strictly eliminate overexposure & blown-out clipping.
       if (hasFlash) {
         const pixelIdx = i >> 2;
         const targetCenterX = focusPoint ? focusPoint.x * width : width * 0.5;
@@ -321,53 +322,42 @@ function applyPixelColorGradingAndGrain(
         // Pre-flash luminance
         const rawLum = 0.299 * r + 0.587 * g + 0.114 * b;
 
-        // Darkness factor: 1.0 in low light (<30 lum), tapering to 0 in well-lit scenes (>130 lum)
-        const darkness = Math.max(0, Math.min(1.0, (130 - rawLum) / 130));
+        // Darkness factor: 1.0 in low light (<30 lum), tapering to 0 in well-lit scenes (>120 lum)
+        const darkness = Math.max(0, Math.min(1.0, (120 - rawLum) / 120));
 
         if (darkness > 0.05) {
           // --- LOW-LIGHT / DARK SCENE FLASH MODEL ---
-          // Uses optical gamma curve so true blacks STAY deep black (no milky gray fog/haze),
-          // while subjects (flowers, faces) are illuminated with rich clarity and contrast.
-          const gamma = 1.0 - 0.42 * darkness * falloff;
+          // Powerful xenon exposure gain + surface bounce lifts subject out of darkness
+          const flashGain = 1.0 + 3.6 * darkness * falloff;
+          const reflectance = Math.min(1.0, Math.max(0, (rawLum - 3) / 18));
+          const xenonBounce = 105 * darkness * falloff * reflectance;
 
-          // Apply gamma lift to each channel (0 stays 0, preserving deep background blacks)
-          const rNorm = Math.pow(Math.max(0, r / 255), gamma) * 255;
-          const gNorm = Math.pow(Math.max(0, g / 255), gamma) * 255;
-          const bNorm = Math.pow(Math.max(0, b / 255), gamma) * 255;
+          r = r * flashGain + xenonBounce;
+          g = g * flashGain + xenonBounce;
+          b = b * flashGain + xenonBounce;
 
-          // Reflectance: flash bounces strongly off solid objects (midtones), not off black voids
-          const normLum = rawLum / 255;
-          const reflectance = Math.min(1.0, Math.pow(normLum / 0.45, 0.8));
-
-          // Directional frontal flash gain on illuminated surfaces
-          const flashGain = 1.0 + 0.95 * darkness * falloff * reflectance;
-
-          r = rNorm * flashGain;
-          g = gNorm * flashGain;
-          b = bNorm * flashGain;
-
-          // Deep black preservation: keep ambient background void clean and deep (no foggy noise)
-          const midLum = 0.299 * r + 0.587 * g + 0.114 * b;
-          if (midLum < 38) {
-            const toeCrush = (38 - midLum) / 38;
-            r = r * (1.0 - toeCrush * 0.40);
-            g = g * (1.0 - toeCrush * 0.40);
-            b = b * (1.0 - toeCrush * 0.40);
+          // Preserve deep black void background (no milky gray fog)
+          const postLum = 0.299 * r + 0.587 * g + 0.114 * b;
+          if (postLum < 24) {
+            const toe = (24 - postLum) / 24;
+            r = r * (1.0 - toe * 0.65);
+            g = g * (1.0 - toe * 0.65);
+            b = b * (1.0 - toe * 0.65);
           }
         } else {
           // --- BRIGHT SCENE FLASH MODEL (DAYLIGHT / LIT ROOMS) ---
-          // Subtle fill-in flash ONLY in deep crevices/shadows (<80 lum).
+          // Subtle fill-in flash ONLY in deep crevices/shadows (<70 lum).
           // Zero addition to bright areas to prevent overexposure/clipping.
-          const shadowFill = Math.max(0, (80 - rawLum) / 80) * 10 * falloff;
+          const shadowFill = Math.max(0, (70 - rawLum) / 70) * 8 * falloff;
           r += shadowFill;
           g += shadowFill;
           b += shadowFill;
         }
 
-        // Film Highlight Shoulder Compression (Anti-Clipping: protects highlights from ever blowing out >215)
-        if (r > 215) r = 215 + (r - 215) * 0.28;
-        if (g > 215) g = 215 + (g - 215) * 0.28;
-        if (b > 215) b = 215 + (b - 215) * 0.28;
+        // Film Highlight Shoulder Compression (Anti-Clipping: protects highlights from ever blowing out >210)
+        if (r > 210) r = 210 + (r - 210) * 0.25;
+        if (g > 210) g = 210 + (g - 210) * 0.25;
+        if (b > 210) b = 210 + (b - 210) * 0.25;
       }
 
       // Calculate post-flash luminance and shadow factor for analog film grading

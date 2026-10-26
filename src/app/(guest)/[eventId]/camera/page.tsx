@@ -816,11 +816,9 @@ export default function CameraPage({ params }: CameraPageProps) {
           </span>
         </div>
 
-        {/* 3:4 PORTRAIT Viewfinder Window with Tap-to-Focus */}
+        {/* 3:4 PORTRAIT Viewfinder Window */}
         <div
-          onClick={handleViewfinderTap}
-          onTouchStart={handleViewfinderTap}
-          className="w-full aspect-[3/4] max-h-[55vh] bg-black rounded-2xl border-4 border-black/40 relative flex items-center justify-center overflow-hidden shadow-inner cursor-crosshair select-none"
+          className="w-full aspect-[3/4] max-h-[55vh] bg-black rounded-2xl border-4 border-black/40 relative flex items-center justify-center overflow-hidden shadow-inner select-none pointer-events-none"
         >
           {/* Live Video Feed with Filter Preview & Zoom scale */}
           <video
@@ -828,17 +826,20 @@ export default function CameraPage({ params }: CameraPageProps) {
             autoPlay
             playsInline
             muted
+            controls={false}
+            disablePictureInPicture
+            disableRemotePlayback
             style={{
               filter: currentPreset.cssFilter,
               transform: `${facingMode === "user" ? "scaleX(-1) " : ""}scale(${zoomLevel})`,
               transition: "transform 0.2s ease-out, filter 0.2s ease-in-out",
             }}
-            className={`w-full h-full object-cover origin-center ${cameraError ? "hidden" : "block"}`}
+            className={`w-full h-full object-cover origin-center pointer-events-none ${cameraError ? "hidden" : "block"}`}
           />
 
           {/* Fallback Screen */}
           {cameraError && (
-            <div className="text-center p-5 text-stone-300">
+            <div className="text-center p-5 text-stone-300 pointer-events-auto">
               <p className="text-xs mb-3 text-stone-300">
                 Live camera stream unavailable on this browser.
               </p>
@@ -860,28 +861,6 @@ export default function CameraPage({ params }: CameraPageProps) {
             <div className="w-3.5 h-3.5 border-b-2 border-r-2 border-white/40 absolute bottom-0 right-0 rounded-br-sm" />
             <div className="w-1.5 h-1.5 rounded-full bg-white/20" />
           </div>
-
-          {/* Interactive Tap-to-Focus Reticle with Corners & Center Dot */}
-          {focusActive && focusPixel && (
-            <div
-              key={`${focusPixel.x}-${focusPixel.y}`}
-              className="absolute pointer-events-none z-30 transition-opacity duration-300"
-              style={{
-                left: `${focusPixel.x}px`,
-                top: `${focusPixel.y}px`,
-                transform: "translate(-50%, -50%)",
-              }}
-            >
-              <div className="w-14 h-14 rounded-xl border-2 border-amber-400 shadow-[0_0_12px_rgba(251,191,36,0.6)] flex items-center justify-center animate-focus-reticle relative">
-                <span className="w-1.5 h-1.5 rounded-full bg-amber-400 shadow" />
-                {/* 4 Corner tick marks */}
-                <div className="absolute -top-1 left-2 right-2 h-0.5 bg-amber-300/80 rounded" />
-                <div className="absolute -bottom-1 left-2 right-2 h-0.5 bg-amber-300/80 rounded" />
-                <div className="absolute -left-1 top-2 bottom-2 w-0.5 bg-amber-300/80 rounded" />
-                <div className="absolute -right-1 top-2 bottom-2 w-0.5 bg-amber-300/80 rounded" />
-              </div>
-            </div>
-          )}
 
           {/* Preset Label Badge */}
           <div className="absolute top-2.5 left-2.5 px-2.5 py-1 rounded-md bg-black/60 backdrop-blur-sm text-[11px] font-medium text-stone-200 pointer-events-none">

@@ -59,7 +59,7 @@ export default function Home() {
           <div className="p-4 bg-[#1c161d] border border-[#352533] rounded-2xl">
             <div className="text-[#d8a4cb] font-bold text-sm mb-1">02. 3:4 Portrait Film</div>
             <p className="text-stone-400 leading-relaxed">
-              Authentic vintage presets: Moody Plum, Kodak Gold, Portra, and CineStill baked directly into photos.
+              Authentic vintage presets: Signature, Moody Plum, Kodak Gold, Portra, and Fuji baked directly into photos.
             </p>
           </div>
           <div className="p-4 bg-[#1c161d] border border-[#352533] rounded-2xl">

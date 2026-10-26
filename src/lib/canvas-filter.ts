@@ -3,10 +3,8 @@ export type FilterEffect =
   | "moody"
   | "gold200"
   | "portra"
-  | "cinestill"
   | "fuji"
   | "polaroid"
-  | "ektachrome"
   | "retro80s"
   | "sepia"
   | "noir";
@@ -54,14 +52,6 @@ export const EFFECT_PRESETS: EffectPreset[] = [
     description: "Soft skin tones, creamy highlights, and flattering natural contrast",
   },
   {
-    id: "cinestill",
-    name: "Cine 800T",
-    icon: "🌙",
-    cssFilter: "contrast(116%) saturate(110%) hue-rotate(185deg) brightness(98%)",
-    grainAmount: 15,
-    description: "Cool tungsten teal shadows with warm halation glow",
-  },
-  {
     id: "fuji",
     name: "Fuji 400H",
     icon: "🌿",
@@ -76,14 +66,6 @@ export const EFFECT_PRESETS: EffectPreset[] = [
     cssFilter: "contrast(98%) saturate(110%) sepia(18%) brightness(105%) hue-rotate(-12deg)",
     grainAmount: 14,
     description: "Classic instant camera warmth with soft peach tones & faded cyan shadows",
-  },
-  {
-    id: "ektachrome",
-    name: "Ekta 100",
-    icon: "🏔️",
-    cssFilter: "contrast(122%) saturate(125%) brightness(101%) hue-rotate(5deg)",
-    grainAmount: 12,
-    description: "70s vintage color slide film with deep sky blues & punchy clarity",
   },
   {
     id: "retro80s",
@@ -413,23 +395,6 @@ function applyPixelColorGradingAndGrain(
           break;
         }
 
-        case "cinestill": {
-          // CineStill 800T: Cool teal/cyan shadows with warm red/orange highlights
-          r -= 6 * shadowFactor;
-          g += 4 * shadowFactor;
-          b += 16 * shadowFactor;
-
-          if (lum > 140) {
-            const glow = (lum - 140) * 0.12;
-            r += glow * 1.4;
-            g += glow * 0.6;
-          }
-
-          r = applySCurve(r, 1.16);
-          g = applySCurve(g, 1.12);
-          b = applySCurve(b, 1.18);
-          break;
-        }
 
         case "fuji": {
           // Fuji Superia 400H: Crisp emerald greens, clean pastel contrast, slightly cool/cyan tone
@@ -462,18 +427,6 @@ function applyPixelColorGradingAndGrain(
           break;
         }
 
-        case "ektachrome": {
-          // Kodak Ektachrome 100: Saturated vintage transparency slide, deep rich blues, high clarity
-          const mean = (r + g + b) / 3;
-          r = mean + (r - mean) * 1.25;
-          g = mean + (g - mean) * 1.22;
-          b = mean + (b - mean) * 1.30;
-
-          r = applySCurve(r, 1.22);
-          g = applySCurve(g, 1.20);
-          b = applySCurve(b, 1.24);
-          break;
-        }
 
         case "retro80s": {
           // Retro 1984: Disposable flash camera look, warm yellow/green tint

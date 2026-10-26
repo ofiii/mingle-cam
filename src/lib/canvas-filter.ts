@@ -79,9 +79,9 @@ export const EFFECT_PRESETS: EffectPreset[] = [
     id: "sepia",
     name: "Antique Sepia",
     icon: "📜",
-    cssFilter: "sepia(85%) contrast(110%) brightness(95%)",
-    grainAmount: 10,
-    description: "1920s antique monochrome sepia print with deep organic grain",
+    cssFilter: "sepia(30%) grayscale(45%) contrast(114%) brightness(98%)",
+    grainAmount: 8,
+    description: "1920s antique warm monochrome print with soft ivory tones",
   },
   {
     id: "noir",
@@ -441,27 +441,32 @@ function applyPixelColorGradingAndGrain(
         }
 
         case "sepia": {
-          // Antique Sepia: 100% exact 1:1 match to camera viewfinder CSS:
-          // cssFilter: "sepia(85%) contrast(110%) brightness(95%)"
+          // Antique Sepia: 100% exact 1:1 match to camera viewfinder (Warm Ivory / Silver-Gelatin print)
+          // Eliminates heavy yellow/mustard tint; renders natural vintage warm monochrome
 
-          // 1. W3C Sepia color matrix transformation at s = 0.85 (1 - s = 0.15)
-          const sr = 0.48405 * r + 0.65365 * g + 0.16065 * b;
-          const sg = 0.29665 * r + 0.73310 * g + 0.14280 * b;
-          const sb = 0.23120 * r + 0.45390 * g + 0.26135 * b;
+          // 1. Calculate luminance (perceived brightness)
+          const lum = 0.299 * r + 0.587 * g + 0.114 * b;
 
-          const clR = Math.min(255, Math.max(0, sr));
-          const clG = Math.min(255, Math.max(0, sg));
-          const clB = Math.min(255, Math.max(0, sb));
+          // 2. Base warm monochrome: blend luminance with original tint (75% monochrome, 25% original)
+          const monoR = lum * 0.75 + r * 0.25;
+          const monoG = lum * 0.75 + g * 0.25;
+          const monoB = lum * 0.75 + b * 0.25;
 
-          // 2. Contrast 110% (W3C standard: (val - 128) * 1.10 + 128)
-          const cr = (clR - 128) * 1.10 + 128;
-          const cg = (clG - 128) * 1.10 + 128;
-          const cb = (clB - 128) * 1.10 + 128;
+          // 3. Subtle Antique Warmth (Ivory highlights, soft warm midtones, rich neutral shadows)
+          const warmFactor = lum / 255;
+          const warmR = monoR + 10 * warmFactor + 2;
+          const warmG = monoG + 5 * warmFactor + 1;
+          const warmB = monoB - 10 * warmFactor;
 
-          // 3. Brightness 95% (W3C standard: val * 0.95)
-          r = Math.min(255, Math.max(0, cr * 0.95));
-          g = Math.min(255, Math.max(0, cg * 0.95));
-          b = Math.min(255, Math.max(0, cb * 0.95));
+          // 4. Contrast 112% (W3C standard contrast curve)
+          const cr = (warmR - 128) * 1.12 + 128;
+          const cg = (warmG - 128) * 1.12 + 128;
+          const cb = (warmB - 128) * 1.12 + 128;
+
+          // 5. Brightness 98%
+          r = Math.min(255, Math.max(0, cr * 0.98));
+          g = Math.min(255, Math.max(0, cg * 0.98));
+          b = Math.min(255, Math.max(0, cb * 0.98));
           break;
         }
 

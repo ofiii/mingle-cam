@@ -469,7 +469,7 @@ function applyPixelColorGradingAndGrain(
         }
       }
 
-      // Authentic Disposable Camera Xenon Flash Light Model (Additive Illumination)
+      // Authentic Disposable / Point-and-Shoot Direct Flash Model (Balanced illumination & highlight protection)
       if (hasFlash) {
         const pixelIdx = i >> 2;
         const targetCenterX = focusPoint ? focusPoint.x * width : width * 0.5;
@@ -478,30 +478,42 @@ function applyPixelColorGradingAndGrain(
         const px = (pixelIdx % width) - targetCenterX;
         const py = ((pixelIdx / width) | 0) - targetCenterY;
 
-        // Distance from center flash position
-        const distNorm = Math.sqrt((px * px) / (width * width * 0.25) + (py * py) / (height * height * 0.25));
+        // Normalized radial distance from the flash center
+        const distNorm = Math.sqrt((px * px) / (width * width * 0.28) + (py * py) / (height * height * 0.28));
 
-        // Flash falloff factor (1.0 at center, ~0.20 at corners)
-        const falloff = Math.max(0.18, 1.0 - distNorm * 0.55);
+        // Natural flash falloff: crisp at center subject, gentle natural drop towards edges
+        // (Clamped between 0.35 at perimeter to 1.0 at center)
+        const falloff = Math.max(0.35, 1.0 - Math.min(1.0, distNorm) * 0.50);
 
-        // 1. Direct Additive Xenon Flash Photons (transforms dark scenes into bright, clear photos!)
-        const directFlashFill = 55 * falloff;
+        // 1. Soft Fill: gently lifts underexposed shadows without blowing out midtones
+        // Deep dark shadows (lum < 90) get a gentle lift of up to +16
+        const shadowFill = Math.max(0, (90 - lum) / 90) * 16 * falloff;
 
-        // 2. Dynamic Shadow Recovery (brightens pitch dark shadows by up to +40)
-        const shadowRecovery = Math.max(0, 1 - lum / 160) * 40 * falloff;
+        // 2. Subtle Subject Illumination (Gentle +10 at center, tapering off as brightness increases)
+        // Highlight protection: scales down to 0 at lum 200 so highlights never clip
+        const highlightProtection = Math.max(0, 1.0 - lum / 200);
+        const gentleFlashFill = 10 * falloff * highlightProtection;
 
-        // 3. Multiplicative exposure boost
-        r = r * 1.30 + directFlashFill + shadowRecovery;
-        g = g * 1.30 + directFlashFill + shadowRecovery;
-        b = b * 1.30 + directFlashFill + shadowRecovery;
+        // 3. Balanced Exposure Factor (gentle 1.06x at center subject, 0.98x at deep edges)
+        const exposureScale = 0.98 + 0.08 * falloff;
 
-        // 4. Specular Xenon Tube Highlight Punch on reflective surfaces & skin
-        if (lum > 65) {
-          const specPop = (lum - 65) * 0.35 * falloff;
-          r += specPop * 1.04;
-          g += specPop * 1.02;
-          b += specPop * 1.10; // characteristic cool white xenon tube flare
+        r = r * exposureScale + shadowFill + gentleFlashFill;
+        g = g * exposureScale + shadowFill + gentleFlashFill;
+        b = b * exposureScale + shadowFill + gentleFlashFill;
+
+        // 4. Subtle catchlight / specular gleam on glossy reflections only (lum > 190), max +4
+        if (lum > 190) {
+          const specCatch = Math.min(4, (lum - 190) * 0.06 * falloff);
+          r += specCatch * 1.02;
+          g += specCatch;
+          b += specCatch * 1.04;
         }
+
+        // 5. Film Highlight Shoulder Roll-off (prevents harsh digital clipping > 225)
+        // Smoothly rolls off highlight peaks to preserve rich skin tones and texture
+        if (r > 225) r = 225 + (r - 225) * 0.42;
+        if (g > 225) g = 225 + (g - 225) * 0.42;
+        if (b > 225) b = 225 + (b - 225) * 0.42;
       }
 
       // Add analog film grain directly in the same single loop

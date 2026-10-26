@@ -80,6 +80,45 @@ export default function CameraPage({ params }: CameraPageProps) {
     }
   }, []);
 
+  // Synchronize guest photos list, photo count, and lastPreview with cache busting
+  const refreshPhotos = useCallback(async () => {
+    try {
+      const localToken =
+        typeof window !== "undefined"
+          ? localStorage.getItem(`mingle_token_${eventId}`)
+          : null;
+
+      const headers: Record<string, string> = {};
+      if (localToken) {
+        headers["x-guest-session"] = localToken;
+      }
+
+      const res = await fetch(`/api/photos?eventId=${eventId}&_t=${Date.now()}`, {
+        headers,
+        cache: "no-store",
+      });
+
+      if (!res.ok) return;
+      const data = await res.json();
+      if (data.photos) {
+        setMyPhotos(data.photos);
+        if (data.photos.length > 0) {
+          setLastPreview(data.photos[0].imageUrl);
+        } else {
+          setLastPreview(null);
+        }
+      }
+      if (data.photoCount !== undefined) {
+        setPhotosTaken(data.photoCount);
+      }
+      if (data.maxPhotos) {
+        setMaxPhotosLimit(data.maxPhotos);
+      }
+    } catch (err) {
+      console.error("Failed to refresh photos:", err);
+    }
+  }, [eventId]);
+
   // Load event details and verify guest session on mount
   useEffect(() => {
     let mounted = true;
@@ -94,7 +133,7 @@ export default function CameraPage({ params }: CameraPageProps) {
       headers["x-guest-session"] = localToken;
     }
 
-    fetch(`/api/events/${eventId}`, { headers })
+    fetch(`/api/events/${eventId}`, { headers, cache: "no-store" })
       .then((res) => {
         if (!res.ok) {
           router.replace(`/${eventId}`);
@@ -118,24 +157,13 @@ export default function CameraPage({ params }: CameraPageProps) {
       })
       .catch(() => {});
 
-    // Fetch guest photos to populate initial last preview
-    fetch(`/api/photos?eventId=${eventId}`, { headers })
-      .then((res) => res.json())
-      .then((data) => {
-        if (!mounted) return;
-        if (data.maxPhotos) setMaxPhotosLimit(data.maxPhotos);
-        if (data.photos && data.photos.length > 0) {
-          setMyPhotos(data.photos);
-          setLastPreview(data.photos[0].imageUrl);
-          setPhotosTaken(data.photoCount);
-        }
-      })
-      .catch(() => {});
+    // Initial sync of photos for Last Photo preview & My Shots
+    refreshPhotos();
 
     return () => {
       mounted = false;
     };
-  }, [eventId, router]);
+  }, [eventId, router, refreshPhotos]);
 
   // Keep camera alive across visibility and focus changes
   useEffect(() => {
@@ -362,7 +390,17 @@ export default function CameraPage({ params }: CameraPageProps) {
         return;
       }
 
+      // 1. Optimistic photo entry for instant real-time sync across Last Photo & My Shots
+      const tempId = `temp-${Date.now()}`;
+      const optimisticPhoto: GuestPhotoItem = {
+        id: tempId,
+        imageUrl: previewUrl,
+        createdAt: new Date().toISOString(),
+      };
+
+      // Real-time simultaneous update across both components:
       setLastPreview(previewUrl);
+      setMyPhotos((prev) => [optimisticPhoto, ...prev]);
       const newCount = photosTaken + 1;
       setPhotosTaken(newCount);
 
@@ -380,16 +418,27 @@ export default function CameraPage({ params }: CameraPageProps) {
 
       // Background upload to Cloudflare R2
       uploadFilteredPhotoToR2({ eventId, blob })
-        .then(() => {
-          fetch(`/api/photos?eventId=${eventId}`)
-            .then((res) => res.json())
-            .then((data) => {
-              if (data.photos) setMyPhotos(data.photos);
-            })
-            .catch(() => {});
+        .then((result) => {
+          // Replace temp item with confirmed item and persistent R2 URL
+          setMyPhotos((prev) =>
+            prev.map((item) =>
+              item.id === tempId
+                ? { ...item, id: result.photoId, imageUrl: result.imageUrl }
+                : item
+            )
+          );
+          setLastPreview((prev) => (prev === previewUrl ? result.imageUrl : prev));
+          // Refresh from server to keep counts completely pristine
+          refreshPhotos();
         })
         .catch((err) => {
           console.error("Background upload failed:", err);
+          // Rollback optimistic additions on error
+          setMyPhotos((prev) => {
+            const reverted = prev.filter((item) => item.id !== tempId);
+            setLastPreview(reverted.length > 0 ? reverted[0].imageUrl : null);
+            return reverted;
+          });
           setPhotosTaken((prev) => Math.max(0, prev - 1));
           const errMsg = err?.message || "Could not save photo. Please check your connection.";
           if (
@@ -429,8 +478,17 @@ export default function CameraPage({ params }: CameraPageProps) {
         flashMode === "on",
         focusPoint
       );
-      setLastPreview(previewUrl);
+      // 1. Optimistic photo entry for instant real-time sync across Last Photo & My Shots
+      const tempId = `temp-${Date.now()}`;
+      const optimisticPhoto: GuestPhotoItem = {
+        id: tempId,
+        imageUrl: previewUrl,
+        createdAt: new Date().toISOString(),
+      };
 
+      // Real-time simultaneous update across both components:
+      setLastPreview(previewUrl);
+      setMyPhotos((prev) => [optimisticPhoto, ...prev]);
       const newCount = photosTaken + 1;
       setPhotosTaken(newCount);
 
@@ -449,16 +507,26 @@ export default function CameraPage({ params }: CameraPageProps) {
 
       // Background upload to Cloudflare R2
       uploadFilteredPhotoToR2({ eventId, blob })
-        .then(() => {
-          fetch(`/api/photos?eventId=${eventId}`)
-            .then((res) => res.json())
-            .then((data) => {
-              if (data.photos) setMyPhotos(data.photos);
-            })
-            .catch(() => {});
+        .then((result) => {
+          // Replace temp item with confirmed item and persistent R2 URL
+          setMyPhotos((prev) =>
+            prev.map((item) =>
+              item.id === tempId
+                ? { ...item, id: result.photoId, imageUrl: result.imageUrl }
+                : item
+            )
+          );
+          setLastPreview((prev) => (prev === previewUrl ? result.imageUrl : prev));
+          refreshPhotos();
         })
         .catch((err) => {
           console.error("Background upload failed:", err);
+          // Rollback optimistic additions on error
+          setMyPhotos((prev) => {
+            const reverted = prev.filter((item) => item.id !== tempId);
+            setLastPreview(reverted.length > 0 ? reverted[0].imageUrl : null);
+            return reverted;
+          });
           setPhotosTaken((prev) => Math.max(0, prev - 1));
           const errMsg = err?.message || "Could not save photo. Please check your connection.";
           if (
@@ -483,23 +551,15 @@ export default function CameraPage({ params }: CameraPageProps) {
     }
   };
 
-  // Open My Photos modal
+  // Open My Photos modal with real-time freshness
   const handleOpenMyPhotos = async () => {
     setShowMyPhotosModal(true);
-    setLoadingMyPhotos(true);
     setConfirmDeleteId(null);
-    try {
-      const res = await fetch(`/api/photos?eventId=${eventId}`);
-      if (res.ok) {
-        const data = await res.json();
-        setMyPhotos(data.photos || []);
-        if (data.photoCount !== undefined) setPhotosTaken(data.photoCount);
-      }
-    } catch (err) {
-      console.error("Failed to load photos", err);
-    } finally {
-      setLoadingMyPhotos(false);
+    if (myPhotos.length === 0) {
+      setLoadingMyPhotos(true);
     }
+    await refreshPhotos();
+    setLoadingMyPhotos(false);
   };
 
   // Close My Photos modal and ensure live camera feed resumes immediately
@@ -518,8 +578,17 @@ export default function CameraPage({ params }: CameraPageProps) {
   const handleDeletePhoto = async (photoId: string) => {
     try {
       setDeletingPhotoId(photoId);
+
+      const localToken =
+        typeof window !== "undefined"
+          ? localStorage.getItem(`mingle_token_${eventId}`)
+          : null;
+      const headers: Record<string, string> = {};
+      if (localToken) headers["x-guest-session"] = localToken;
+
       const res = await fetch(`/api/photos?photoId=${photoId}&eventId=${eventId}`, {
         method: "DELETE",
+        headers,
       });
 
       if (!res.ok) {
@@ -531,6 +600,7 @@ export default function CameraPage({ params }: CameraPageProps) {
       const updatedList = myPhotos.filter((p) => p.id !== photoId);
       setMyPhotos(updatedList);
       setPhotosTaken(data.photoCount);
+      // Synchronize Last Photo thumbnail in real time
       setLastPreview(updatedList.length > 0 ? updatedList[0].imageUrl : null);
       setConfirmDeleteId(null);
 

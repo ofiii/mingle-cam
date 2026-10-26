@@ -61,6 +61,22 @@ export default function CameraPage({ params }: CameraPageProps) {
   const [loadingMyPhotos, setLoadingMyPhotos] = useState(false);
   const [deletingPhotoId, setDeletingPhotoId] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const deletedPhotoIdsRef = useRef<Set<string>>(new Set());
+
+  // Load previously deleted photo IDs from sessionStorage on mount
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const raw = sessionStorage.getItem(`mingle_deleted_photos_${eventId}`);
+        if (raw) {
+          const arr = JSON.parse(raw);
+          if (Array.isArray(arr)) {
+            arr.forEach((id: string) => deletedPhotoIdsRef.current.add(id));
+          }
+        }
+      } catch (_) {}
+    }
+  }, [eventId]);
 
   // Tap-to-Focus State
   const [focusPoint, setFocusPoint] = useState<{ x: number; y: number } | null>(null);
@@ -106,11 +122,13 @@ export default function CameraPage({ params }: CameraPageProps) {
           // Keep in-flight optimistic uploads (temp-*)
           const pending = prev.filter((p) => p.id.startsWith("temp-"));
 
-          // Map server photos and preserve any in-memory previewUrl so images don't re-fetch
-          const serverPhotos: GuestPhotoItem[] = data.photos.map((sp: GuestPhotoItem) => {
-            const existing = prev.find((ep) => ep.id === sp.id);
-            return existing?.previewUrl ? { ...sp, previewUrl: existing.previewUrl } : sp;
-          });
+          // Map server photos and strictly exclude any photo that was deleted locally!
+          const serverPhotos: GuestPhotoItem[] = data.photos
+            .filter((sp: GuestPhotoItem) => !deletedPhotoIdsRef.current.has(sp.id))
+            .map((sp: GuestPhotoItem) => {
+              const existing = prev.find((ep) => ep.id === sp.id);
+              return existing?.previewUrl ? { ...sp, previewUrl: existing.previewUrl } : sp;
+            });
 
           // Pending uploads always stay on top
           return pending.length > 0 ? [...pending, ...serverPhotos] : serverPhotos;
@@ -118,8 +136,17 @@ export default function CameraPage({ params }: CameraPageProps) {
 
         // Retain lastPreview if already showing an in-memory blob or current photo
         setLastPreview((prev) => {
-          if (prev) return prev;
-          return data.photos.length > 0 ? data.photos[0].imageUrl : null;
+          const activePhotos = data.photos.filter(
+            (sp: GuestPhotoItem) => !deletedPhotoIdsRef.current.has(sp.id)
+          );
+          if (prev) {
+            // Check if current preview was from a deleted photo
+            const wasDeleted = Array.from(deletedPhotoIdsRef.current).some(
+              (id) => prev.includes(encodeURIComponent(id)) || prev.includes(id)
+            );
+            if (!wasDeleted) return prev;
+          }
+          return activePhotos.length > 0 ? activePhotos[0].imageUrl : null;
         });
       }
       if (data.photoCount !== undefined) {
@@ -612,12 +639,34 @@ export default function CameraPage({ params }: CameraPageProps) {
 
   // Delete a photo owned by this guest (instant optimistic response with background sync)
   const handleDeletePhoto = async (photoId: string) => {
-    // 1. Snapshot previous state for rollback on error
+    // 1. Immediately register to deleted IDs to prevent any in-flight refresh from reviving it
+    deletedPhotoIdsRef.current.add(photoId);
+    if (typeof window !== "undefined") {
+      try {
+        const currentArr = Array.from(deletedPhotoIdsRef.current);
+        sessionStorage.setItem(`mingle_deleted_photos_${eventId}`, JSON.stringify(currentArr));
+
+        // Immediately update gallery cache in sessionStorage if present
+        const rawGalleryCache = sessionStorage.getItem(`mingle_gallery_cache_${eventId}`);
+        if (rawGalleryCache) {
+          const parsed = JSON.parse(rawGalleryCache);
+          if (parsed.photos && Array.isArray(parsed.photos)) {
+            parsed.photos = parsed.photos.filter((p: { id: string }) => p.id !== photoId);
+          }
+          if (parsed.totalPhotos !== undefined) {
+            parsed.totalPhotos = Math.max(0, parsed.totalPhotos - 1);
+          }
+          sessionStorage.setItem(`mingle_gallery_cache_${eventId}`, JSON.stringify(parsed));
+        }
+      } catch (_) {}
+    }
+
+    // 2. Snapshot previous state for rollback on error
     const previousPhotos = [...myPhotos];
     const previousCount = photosTaken;
     const previousPreview = lastPreview;
 
-    // 2. Instant optimistic deletion (0ms delay)
+    // 3. Instant optimistic deletion (0ms delay)
     const updatedList = myPhotos.filter((p) => p.id !== photoId);
     setMyPhotos(updatedList);
     const newPhotosCount = Math.max(0, photosTaken - 1);
@@ -634,7 +683,7 @@ export default function CameraPage({ params }: CameraPageProps) {
     setBannerText(`Photo deleted! You now have ${remaining} shots left.`);
     setTimeout(() => setBannerText(null), 3000);
 
-    // 3. Background server synchronization
+    // 4. Background server synchronization
     try {
       const localToken =
         typeof window !== "undefined"
@@ -659,7 +708,16 @@ export default function CameraPage({ params }: CameraPageProps) {
       }
     } catch (err: unknown) {
       console.error("Delete failed, reverting state:", err);
-      // Revert optimistic changes on failure
+      // Revert deletion tracking on error
+      deletedPhotoIdsRef.current.delete(photoId);
+      if (typeof window !== "undefined") {
+        try {
+          sessionStorage.setItem(
+            `mingle_deleted_photos_${eventId}`,
+            JSON.stringify(Array.from(deletedPhotoIdsRef.current))
+          );
+        } catch (_) {}
+      }
       setMyPhotos(previousPhotos);
       setPhotosTaken(previousCount);
       setLastPreview(previousPreview);

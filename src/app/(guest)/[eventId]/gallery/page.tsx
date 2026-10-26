@@ -30,6 +30,16 @@ export default function GalleryPage({ params }: GalleryPageProps) {
   // View mode is strictly "large" | "small"
   const [viewMode, setViewMode] = useState<"large" | "small">("large");
 
+  // Helper to read locally deleted photos from sessionStorage
+  const getDeletedIds = (): Set<string> => {
+    if (typeof window === "undefined") return new Set();
+    try {
+      const raw = sessionStorage.getItem(`mingle_deleted_photos_${eventId}`);
+      if (raw) return new Set(JSON.parse(raw));
+    } catch (_) {}
+    return new Set();
+  };
+
   // Read view mode and instant session cache on mount
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -43,12 +53,15 @@ export default function GalleryPage({ params }: GalleryPageProps) {
         const rawCache = sessionStorage.getItem(`mingle_gallery_cache_${eventId}`);
         if (rawCache) {
           const cached = JSON.parse(rawCache);
+          const deletedIds = getDeletedIds();
           if (cached.eventName) setEventName(cached.eventName);
           if (cached.themeColor) setThemeColor(cached.themeColor);
           if (cached.totalPhotos !== undefined) setTotalPhotos(cached.totalPhotos);
           if (cached.revealDate) setRevealDate(new Date(cached.revealDate));
           if (cached.isRevealed !== undefined) setIsRevealed(cached.isRevealed);
-          if (cached.photos && Array.isArray(cached.photos)) setPhotos(cached.photos);
+          if (cached.photos && Array.isArray(cached.photos)) {
+            setPhotos(cached.photos.filter((p: PhotoItem) => !deletedIds.has(p.id)));
+          }
           if (cached.currentGuest) setCurrentGuest(cached.currentGuest);
           setLoading(false);
         }
@@ -98,12 +111,17 @@ export default function GalleryPage({ params }: GalleryPageProps) {
         const targetDate = new Date(data.event.revealDate);
         setRevealDate(targetDate);
         setIsRevealed(data.isRevealed);
+        const deletedIds = getDeletedIds();
         if (data.isRevealed && data.photos) {
-          setPhotos(data.photos);
+          const activePhotos = data.photos.filter((p: PhotoItem) => !deletedIds.has(p.id));
+          setPhotos(activePhotos);
         }
 
         // Cache response in sessionStorage for instant loading on subsequent views
         try {
+          const activePhotos = data.photos
+            ? data.photos.filter((p: PhotoItem) => !deletedIds.has(p.id))
+            : [];
           sessionStorage.setItem(
             `mingle_gallery_cache_${eventId}`,
             JSON.stringify({
@@ -112,7 +130,7 @@ export default function GalleryPage({ params }: GalleryPageProps) {
               totalPhotos: data.event?.totalPhotos,
               revealDate: data.event?.revealDate,
               isRevealed: data.isRevealed,
-              photos: data.photos || [],
+              photos: activePhotos,
               currentGuest: data.currentGuest || null,
             })
           );
@@ -149,7 +167,10 @@ export default function GalleryPage({ params }: GalleryPageProps) {
         fetch(`/api/events/${eventId}`)
           .then((res) => res.json())
           .then((data) => {
-            if (data.photos) setPhotos(data.photos);
+            const deletedIds = getDeletedIds();
+            if (data.photos) {
+              setPhotos(data.photos.filter((p: PhotoItem) => !deletedIds.has(p.id)));
+            }
           })
           .catch(() => {});
         clearInterval(timer);
@@ -169,6 +190,38 @@ export default function GalleryPage({ params }: GalleryPageProps) {
 
   const handleDeleteFromGallery = async (photoId: string) => {
     if (!confirm("Are you sure you want to delete this photo from the event album?")) return;
+
+    // 1. Instantly remove from UI optimistically (0ms)
+    const prevPhotos = [...photos];
+    const prevTotal = totalPhotos;
+    setPhotos((prev) => prev.filter((p) => p.id !== photoId));
+    setTotalPhotos((prev) => Math.max(0, prev - 1));
+    setSelectedPhoto(null);
+
+    // 2. Mark in sessionStorage deleted list and update gallery cache immediately
+    if (typeof window !== "undefined") {
+      try {
+        let deletedSet: string[] = [];
+        const raw = sessionStorage.getItem(`mingle_deleted_photos_${eventId}`);
+        if (raw) deletedSet = JSON.parse(raw);
+        if (!deletedSet.includes(photoId)) deletedSet.push(photoId);
+        sessionStorage.setItem(`mingle_deleted_photos_${eventId}`, JSON.stringify(deletedSet));
+
+        // Update gallery cache
+        const rawCache = sessionStorage.getItem(`mingle_gallery_cache_${eventId}`);
+        if (rawCache) {
+          const parsed = JSON.parse(rawCache);
+          if (parsed.photos && Array.isArray(parsed.photos)) {
+            parsed.photos = parsed.photos.filter((p: PhotoItem) => p.id !== photoId);
+          }
+          if (parsed.totalPhotos !== undefined) {
+            parsed.totalPhotos = Math.max(0, parsed.totalPhotos - 1);
+          }
+          sessionStorage.setItem(`mingle_gallery_cache_${eventId}`, JSON.stringify(parsed));
+        }
+      } catch (_) {}
+    }
+
     try {
       const localToken =
         typeof window !== "undefined"
@@ -182,9 +235,9 @@ export default function GalleryPage({ params }: GalleryPageProps) {
         headers,
       });
       if (!res.ok) throw new Error("Could not delete photo");
-      setPhotos((prev) => prev.filter((p) => p.id !== photoId));
-      setSelectedPhoto(null);
     } catch (err: unknown) {
+      setPhotos(prevPhotos);
+      setTotalPhotos(prevTotal);
       alert((err as Error).message || "Failed to delete photo");
     }
   };

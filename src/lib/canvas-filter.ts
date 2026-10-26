@@ -80,7 +80,7 @@ export const EFFECT_PRESETS: EffectPreset[] = [
     name: "Antique Sepia",
     icon: "📜",
     cssFilter: "sepia(85%) contrast(110%) brightness(95%)",
-    grainAmount: 20,
+    grainAmount: 10,
     description: "1920s antique monochrome sepia print with deep organic grain",
   },
   {
@@ -441,18 +441,27 @@ function applyPixelColorGradingAndGrain(
         }
 
         case "sepia": {
-          // Antique Sepia: 1920s authentic monochrome sepia print
-          const sepiaR = lum * 0.95 + 40;
-          const sepiaG = lum * 0.85 + 20;
-          const sepiaB = lum * 0.65;
+          // Antique Sepia: 100% exact 1:1 match to camera viewfinder CSS:
+          // cssFilter: "sepia(85%) contrast(110%) brightness(95%)"
 
-          r = Math.min(255, sepiaR * 0.9 + 12 * shadowFactor);
-          g = Math.min(255, sepiaG * 0.9 + 8 * shadowFactor);
-          b = Math.min(255, sepiaB * 0.9);
+          // 1. W3C Sepia color matrix transformation at s = 0.85 (1 - s = 0.15)
+          const sr = 0.48405 * r + 0.65365 * g + 0.16065 * b;
+          const sg = 0.29665 * r + 0.73310 * g + 0.14280 * b;
+          const sb = 0.23120 * r + 0.45390 * g + 0.26135 * b;
 
-          r = applySCurve(r, 1.15);
-          g = applySCurve(g, 1.12);
-          b = applySCurve(b, 1.10);
+          const clR = Math.min(255, Math.max(0, sr));
+          const clG = Math.min(255, Math.max(0, sg));
+          const clB = Math.min(255, Math.max(0, sb));
+
+          // 2. Contrast 110% (W3C standard: (val - 128) * 1.10 + 128)
+          const cr = (clR - 128) * 1.10 + 128;
+          const cg = (clG - 128) * 1.10 + 128;
+          const cb = (clB - 128) * 1.10 + 128;
+
+          // 3. Brightness 95% (W3C standard: val * 0.95)
+          r = Math.min(255, Math.max(0, cr * 0.95));
+          g = Math.min(255, Math.max(0, cg * 0.95));
+          b = Math.min(255, Math.max(0, cb * 0.95));
           break;
         }
 

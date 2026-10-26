@@ -168,6 +168,22 @@ export default function CameraPage({ params }: CameraPageProps) {
         if (data.currentGuest?.photoCount !== undefined) {
           setPhotosTaken(data.currentGuest.photoCount);
         }
+
+        // Cache event metadata so clicking gallery opens in 0ms
+        try {
+          sessionStorage.setItem(
+            `mingle_gallery_cache_${eventId}`,
+            JSON.stringify({
+              eventName: data.event?.name,
+              themeColor: data.event?.themeColor,
+              totalPhotos: data.event?.totalPhotos,
+              revealDate: data.event?.revealDate,
+              isRevealed: data.isRevealed,
+              photos: data.photos || [],
+              currentGuest: data.currentGuest || null,
+            })
+          );
+        } catch (_) {}
       })
       .catch(() => {});
 
@@ -963,6 +979,7 @@ export default function CameraPage({ params }: CameraPageProps) {
         </button>
         <Link
           href={`/${eventId}/gallery`}
+          prefetch={true}
           className="text-stone-300 hover:text-white text-xs font-semibold underline underline-offset-4 transition-colors"
         >
           View Album Gallery →

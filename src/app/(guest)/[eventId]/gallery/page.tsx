@@ -26,18 +26,37 @@ export default function GalleryPage({ params }: GalleryPageProps) {
   const [photos, setPhotos] = useState<PhotoItem[]>([]);
   const [selectedPhoto, setSelectedPhoto] = useState<PhotoItem | null>(null);
   const [currentGuest, setCurrentGuest] = useState<{ id: string; name: string } | null>(null);
-  const [viewMode, setViewMode] = useState<"large" | "small" | "list">("large");
+  
+  // View mode is strictly "large" | "small"
+  const [viewMode, setViewMode] = useState<"large" | "small">("large");
 
+  // Read view mode and instant session cache on mount
   useEffect(() => {
     if (typeof window !== "undefined") {
       const saved = localStorage.getItem("mingle_gallery_view");
-      if (saved === "large" || saved === "small" || saved === "list") {
+      if (saved === "large" || saved === "small") {
         setViewMode(saved);
       }
-    }
-  }, []);
 
-  const handleViewModeChange = (mode: "large" | "small" | "list") => {
+      // Instant 0ms cache retrieval
+      try {
+        const rawCache = sessionStorage.getItem(`mingle_gallery_cache_${eventId}`);
+        if (rawCache) {
+          const cached = JSON.parse(rawCache);
+          if (cached.eventName) setEventName(cached.eventName);
+          if (cached.themeColor) setThemeColor(cached.themeColor);
+          if (cached.totalPhotos !== undefined) setTotalPhotos(cached.totalPhotos);
+          if (cached.revealDate) setRevealDate(new Date(cached.revealDate));
+          if (cached.isRevealed !== undefined) setIsRevealed(cached.isRevealed);
+          if (cached.photos && Array.isArray(cached.photos)) setPhotos(cached.photos);
+          if (cached.currentGuest) setCurrentGuest(cached.currentGuest);
+          setLoading(false);
+        }
+      } catch (_) {}
+    }
+  }, [eventId]);
+
+  const handleViewModeChange = (mode: "large" | "small") => {
     setViewMode(mode);
     if (typeof window !== "undefined") {
       localStorage.setItem("mingle_gallery_view", mode);
@@ -57,7 +76,14 @@ export default function GalleryPage({ params }: GalleryPageProps) {
 
     async function fetchEventData() {
       try {
-        const res = await fetch(`/api/events/${eventId}`);
+        const localToken =
+          typeof window !== "undefined"
+            ? localStorage.getItem(`mingle_token_${eventId}`)
+            : null;
+        const headers: Record<string, string> = {};
+        if (localToken) headers["x-guest-session"] = localToken;
+
+        const res = await fetch(`/api/events/${eventId}`, { headers });
         if (!res.ok) return;
         const data = await res.json();
         if (!mounted) return;
@@ -75,6 +101,22 @@ export default function GalleryPage({ params }: GalleryPageProps) {
         if (data.isRevealed && data.photos) {
           setPhotos(data.photos);
         }
+
+        // Cache response in sessionStorage for instant loading on subsequent views
+        try {
+          sessionStorage.setItem(
+            `mingle_gallery_cache_${eventId}`,
+            JSON.stringify({
+              eventName: data.event?.name,
+              themeColor: data.event?.themeColor,
+              totalPhotos: data.event?.totalPhotos,
+              revealDate: data.event?.revealDate,
+              isRevealed: data.isRevealed,
+              photos: data.photos || [],
+              currentGuest: data.currentGuest || null,
+            })
+          );
+        } catch (_) {}
       } catch (e) {
         console.error(e);
       } finally {
@@ -83,13 +125,18 @@ export default function GalleryPage({ params }: GalleryPageProps) {
     }
 
     fetchEventData();
-    const interval = setInterval(fetchEventData, 10000);
+
+    // Only set poll interval if vault is still locked
+    let interval: NodeJS.Timeout | null = null;
+    if (!isRevealed) {
+      interval = setInterval(fetchEventData, 10000);
+    }
 
     return () => {
       mounted = false;
-      clearInterval(interval);
+      if (interval) clearInterval(interval);
     };
-  }, [eventId]);
+  }, [eventId, isRevealed]);
 
   // Live countdown ticker
   useEffect(() => {
@@ -142,20 +189,6 @@ export default function GalleryPage({ params }: GalleryPageProps) {
     }
   };
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-stone-950 text-stone-100 flex items-center justify-center p-4 font-sans">
-        <div className="text-center">
-          <div
-            className="w-8 h-8 border-3 border-t-transparent rounded-full animate-spin mx-auto mb-3"
-            style={{ borderColor: themeColor, borderTopColor: "transparent" }}
-          />
-          <p className="text-xs text-stone-400 font-medium">Opening Album Vault...</p>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="min-h-screen bg-stone-950 text-stone-100 flex flex-col font-sans select-none">
       {/* Header */}
@@ -173,6 +206,7 @@ export default function GalleryPage({ params }: GalleryPageProps) {
 
         <Link
           href={`/${eventId}/camera`}
+          prefetch={true}
           style={{ backgroundColor: themeColor }}
           className="px-3.5 py-1.5 hover:brightness-110 text-white text-xs font-semibold rounded-xl border border-white/20 transition-all flex items-center space-x-1.5 shadow"
         >
@@ -197,10 +231,14 @@ export default function GalleryPage({ params }: GalleryPageProps) {
               Every photo snapped by guests is developing secretly inside the event vault. All photos will be revealed together on:
               <br />
               <strong className="text-stone-200 font-semibold block mt-1">
-                {revealDate?.toLocaleString(undefined, {
-                  dateStyle: "full",
-                  timeStyle: "short",
-                })}
+                {revealDate ? (
+                  revealDate.toLocaleString(undefined, {
+                    dateStyle: "full",
+                    timeStyle: "short",
+                  })
+                ) : (
+                  <span className="inline-block w-40 h-4 bg-stone-800 rounded animate-pulse" />
+                )}
               </strong>
             </p>
 
@@ -238,9 +276,9 @@ export default function GalleryPage({ params }: GalleryPageProps) {
             </div>
           </div>
         ) : (
-          /* UNLOCKED MASONRY GALLERY */
+          /* UNLOCKED GALLERY */
           <div>
-            {/* Gallery Subheader with View Switcher */}
+            {/* Gallery Subheader with View Switcher: ONLY Large & Small */}
             <div className="mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div>
                 <span
@@ -254,16 +292,16 @@ export default function GalleryPage({ params }: GalleryPageProps) {
                 </h2>
               </div>
 
-              {/* View Switcher: Large / Small / List */}
+              {/* View Switcher: Strictly 2 Options (Large & Small) */}
               <div className="inline-flex items-center space-x-1 bg-stone-900 border border-stone-800 p-1 rounded-2xl shadow-inner self-start sm:self-auto">
                 <button
                   onClick={() => handleViewModeChange("large")}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center space-x-1.5 transition-all ${
+                  className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold flex items-center space-x-1.5 transition-all ${
                     viewMode === "large"
                       ? "bg-white text-stone-900 shadow-md font-bold scale-[1.02]"
                       : "text-stone-400 hover:text-stone-200"
                   }`}
-                  title="Large photo view"
+                  title="Large feed view"
                 >
                   <span>🔲</span>
                   <span>Large</span>
@@ -271,7 +309,7 @@ export default function GalleryPage({ params }: GalleryPageProps) {
 
                 <button
                   onClick={() => handleViewModeChange("small")}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center space-x-1.5 transition-all ${
+                  className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold flex items-center space-x-1.5 transition-all ${
                     viewMode === "small"
                       ? "bg-white text-stone-900 shadow-md font-bold scale-[1.02]"
                       : "text-stone-400 hover:text-stone-200"
@@ -281,94 +319,56 @@ export default function GalleryPage({ params }: GalleryPageProps) {
                   <span>▦</span>
                   <span>Small</span>
                 </button>
-
-                <button
-                  onClick={() => handleViewModeChange("list")}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center space-x-1.5 transition-all ${
-                    viewMode === "list"
-                      ? "bg-white text-stone-900 shadow-md font-bold scale-[1.02]"
-                      : "text-stone-400 hover:text-stone-200"
-                  }`}
-                  title="Feed list view"
-                >
-                  <span>☰</span>
-                  <span>List</span>
-                </button>
               </div>
             </div>
 
-            {photos.length === 0 ? (
+            {loading && photos.length === 0 ? (
+              /* FAST SKELETON LOADER FOR INSTANT PERCEIVED PERFORMANCE */
+              viewMode === "large" ? (
+                <div className="max-w-md mx-auto space-y-6">
+                  {[1, 2].map((n) => (
+                    <div
+                      key={n}
+                      className="bg-stone-900 border border-stone-800 rounded-3xl overflow-hidden animate-pulse shadow-xl"
+                    >
+                      <div className="p-3.5 flex items-center space-x-2.5 border-b border-stone-800/80 bg-stone-950/60">
+                        <div className="w-8 h-8 rounded-full bg-stone-800" />
+                        <div className="space-y-1.5 flex-1">
+                          <div className="h-3 bg-stone-800 rounded w-1/3" />
+                          <div className="h-2 bg-stone-800/60 rounded w-1/4" />
+                        </div>
+                      </div>
+                      <div className="w-full aspect-[3/4] bg-stone-950 flex items-center justify-center">
+                        <div
+                          className="w-8 h-8 border-2 rounded-full animate-spin"
+                          style={{ borderColor: themeColor, borderTopColor: "transparent" }}
+                        />
+                      </div>
+                      <div className="p-3 bg-stone-950 border-t border-stone-800/80 flex justify-between">
+                        <div className="h-4 bg-stone-800 rounded w-24" />
+                        <div className="h-4 bg-stone-800 rounded w-16" />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-2 sm:gap-3">
+                  {[1, 2, 3, 4, 5, 6].map((n) => (
+                    <div
+                      key={n}
+                      className="aspect-[3/4] bg-stone-900 border border-stone-800 rounded-xl animate-pulse"
+                    />
+                  ))}
+                </div>
+              )
+            ) : photos.length === 0 ? (
               <div className="text-center py-20 text-stone-500 text-sm">
                 No photos have been captured yet for this event.
               </div>
             ) : viewMode === "large" ? (
-              /* VIEW MODE: LARGE GRID */
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-5">
-                {photos.map((photo) => (
-                  <div
-                    key={photo.id}
-                    onClick={() => setSelectedPhoto(photo)}
-                    className="bg-stone-900 border border-stone-800 rounded-3xl overflow-hidden cursor-pointer hover:border-white/40 transition-all shadow-lg group relative flex flex-col"
-                  >
-                    <div className="w-full aspect-[3/4] overflow-hidden bg-black relative">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src={photo.imageUrl}
-                        alt={`Photo by ${photo.guest.name}`}
-                        loading="lazy"
-                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                      />
-                      <div className="absolute top-3 right-3 w-8 h-8 rounded-full bg-black/60 backdrop-blur-sm flex items-center justify-center text-white/80 opacity-0 group-hover:opacity-100 transition-opacity">
-                        🔍
-                      </div>
-                    </div>
-                    <div className="p-3.5 flex items-center justify-between text-xs text-stone-300 bg-stone-950 border-t border-stone-800/80">
-                      <div className="flex items-center space-x-2 truncate">
-                        <div className="w-6 h-6 rounded-full bg-stone-800 border border-stone-700 flex items-center justify-center text-[11px] font-bold text-stone-200 flex-shrink-0">
-                          {photo.guest.name.charAt(0).toUpperCase()}
-                        </div>
-                        <span className="font-semibold text-white truncate">
-                          {photo.guest.name}
-                        </span>
-                      </div>
-                      <span className="text-[11px] text-stone-400 font-mono flex-shrink-0">
-                        {new Date(photo.createdAt).toLocaleTimeString([], {
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })}
-                      </span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : viewMode === "small" ? (
-              /* VIEW MODE: SMALL TILES */
-              <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-2 sm:gap-3">
-                {photos.map((photo) => (
-                  <div
-                    key={photo.id}
-                    onClick={() => setSelectedPhoto(photo)}
-                    className="aspect-[3/4] bg-stone-900 border border-stone-800 rounded-xl overflow-hidden cursor-pointer hover:border-white/50 transition-all shadow-sm group relative"
-                  >
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={photo.imageUrl}
-                      alt={`Photo by ${photo.guest.name}`}
-                      loading="lazy"
-                      className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
-                    />
-                    <div className="absolute bottom-0 inset-x-0 p-1 bg-gradient-to-t from-black/85 via-black/40 to-transparent">
-                      <span className="text-[10px] text-white/95 font-medium block truncate text-center drop-shadow">
-                        {photo.guest.name}
-                      </span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              /* VIEW MODE: VERTICAL FEED / LIST */
+              /* VIEW MODE: LARGE (Single-column feed format, previously 'list') */
               <div className="max-w-md mx-auto space-y-6">
-                {photos.map((photo) => (
+                {photos.map((photo, idx) => (
                   <div
                     key={photo.id}
                     className="bg-stone-900 border border-stone-800 rounded-3xl overflow-hidden shadow-xl"
@@ -401,13 +401,14 @@ export default function GalleryPage({ params }: GalleryPageProps) {
                     {/* Big Photo Container */}
                     <div
                       onClick={() => setSelectedPhoto(photo)}
-                      className="w-full aspect-[3/4] bg-black overflow-hidden cursor-zoom-in relative group"
+                      className="w-full aspect-[3/4] bg-stone-950 overflow-hidden cursor-zoom-in relative group"
                     >
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img
                         src={photo.imageUrl}
                         alt={`Photo by ${photo.guest.name}`}
-                        loading="lazy"
+                        loading={idx < 2 ? "eager" : "lazy"}
+                        decoding="async"
                         className="w-full h-full object-cover group-hover:scale-[1.01] transition-transform duration-300"
                       />
                     </div>
@@ -436,6 +437,31 @@ export default function GalleryPage({ params }: GalleryPageProps) {
                   </div>
                 ))}
               </div>
+            ) : (
+              /* VIEW MODE: SMALL TILES */
+              <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-2 sm:gap-3">
+                {photos.map((photo, idx) => (
+                  <div
+                    key={photo.id}
+                    onClick={() => setSelectedPhoto(photo)}
+                    className="aspect-[3/4] bg-stone-900 border border-stone-800 rounded-xl overflow-hidden cursor-pointer hover:border-white/50 transition-all shadow-sm group relative"
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={photo.imageUrl}
+                      alt={`Photo by ${photo.guest.name}`}
+                      loading={idx < 6 ? "eager" : "lazy"}
+                      decoding="async"
+                      className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
+                    />
+                    <div className="absolute bottom-0 inset-x-0 p-1 bg-gradient-to-t from-black/85 via-black/40 to-transparent">
+                      <span className="text-[10px] text-white/95 font-medium block truncate text-center drop-shadow">
+                        {photo.guest.name}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
             )}
           </div>
         )}
@@ -452,7 +478,7 @@ export default function GalleryPage({ params }: GalleryPageProps) {
             <img
               src={selectedPhoto.imageUrl}
               alt="Full resolution capture"
-              className="max-h-[80vh] w-auto rounded-2xl shadow-2xl object-contain border border-[#482243]"
+              className="max-h-[80vh] w-auto rounded-2xl shadow-2xl object-contain border border-stone-800"
             />
             <div className="mt-3 text-xs text-stone-200 flex items-center space-x-4">
               <span>Captured by: <strong className="text-white">{selectedPhoto.guest.name}</strong></span>
@@ -462,7 +488,7 @@ export default function GalleryPage({ params }: GalleryPageProps) {
                 rel="noreferrer"
                 download
                 onClick={(e) => e.stopPropagation()}
-                className="text-[#d8a4cb] hover:text-white underline font-medium"
+                className="text-white underline font-medium hover:text-stone-300"
               >
                 Download Original ↗
               </a>

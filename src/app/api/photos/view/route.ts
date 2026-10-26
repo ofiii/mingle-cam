@@ -29,7 +29,9 @@ export async function GET(req: NextRequest) {
     return new Response(stream, {
       headers: {
         "Content-Type": response.ContentType || "image/jpeg",
-        "Cache-Control": "public, max-age=31536000, immutable",
+        "Cache-Control": "public, max-age=31536000, s-maxage=31536000, stale-while-revalidate=86400, immutable",
+        "CDN-Cache-Control": "public, max-age=31536000",
+        "Vercel-CDN-Cache-Control": "public, max-age=31536000",
         "ETag": response.ETag || "",
       },
     });

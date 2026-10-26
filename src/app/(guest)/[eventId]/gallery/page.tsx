@@ -26,6 +26,23 @@ export default function GalleryPage({ params }: GalleryPageProps) {
   const [photos, setPhotos] = useState<PhotoItem[]>([]);
   const [selectedPhoto, setSelectedPhoto] = useState<PhotoItem | null>(null);
   const [currentGuest, setCurrentGuest] = useState<{ id: string; name: string } | null>(null);
+  const [viewMode, setViewMode] = useState<"large" | "small" | "list">("large");
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("mingle_gallery_view");
+      if (saved === "large" || saved === "small" || saved === "list") {
+        setViewMode(saved);
+      }
+    }
+  }, []);
+
+  const handleViewModeChange = (mode: "large" | "small" | "list") => {
+    setViewMode(mode);
+    if (typeof window !== "undefined") {
+      localStorage.setItem("mingle_gallery_view", mode);
+    }
+  };
 
   // Countdown state
   const [timeLeft, setTimeLeft] = useState<{
@@ -106,8 +123,16 @@ export default function GalleryPage({ params }: GalleryPageProps) {
   const handleDeleteFromGallery = async (photoId: string) => {
     if (!confirm("Are you sure you want to delete this photo from the event album?")) return;
     try {
+      const localToken =
+        typeof window !== "undefined"
+          ? localStorage.getItem(`mingle_token_${eventId}`)
+          : null;
+      const headers: Record<string, string> = {};
+      if (localToken) headers["x-guest-session"] = localToken;
+
       const res = await fetch(`/api/photos?photoId=${photoId}&eventId=${eventId}`, {
         method: "DELETE",
+        headers,
       });
       if (!res.ok) throw new Error("Could not delete photo");
       setPhotos((prev) => prev.filter((p) => p.id !== photoId));
@@ -215,7 +240,8 @@ export default function GalleryPage({ params }: GalleryPageProps) {
         ) : (
           /* UNLOCKED MASONRY GALLERY */
           <div>
-            <div className="mb-6 flex items-center justify-between">
+            {/* Gallery Subheader with View Switcher */}
+            <div className="mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div>
                 <span
                   className="text-xs uppercase tracking-wider font-bold"
@@ -224,8 +250,50 @@ export default function GalleryPage({ params }: GalleryPageProps) {
                   ✨ The Vault Is Open!
                 </span>
                 <h2 className="text-xl sm:text-2xl font-bold text-white">
-                  Shared Moments
+                  Shared Moments ({photos.length})
                 </h2>
+              </div>
+
+              {/* View Switcher: Large / Small / List */}
+              <div className="inline-flex items-center space-x-1 bg-stone-900 border border-stone-800 p-1 rounded-2xl shadow-inner self-start sm:self-auto">
+                <button
+                  onClick={() => handleViewModeChange("large")}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center space-x-1.5 transition-all ${
+                    viewMode === "large"
+                      ? "bg-white text-stone-900 shadow-md font-bold scale-[1.02]"
+                      : "text-stone-400 hover:text-stone-200"
+                  }`}
+                  title="Large photo view"
+                >
+                  <span>🔲</span>
+                  <span>Large</span>
+                </button>
+
+                <button
+                  onClick={() => handleViewModeChange("small")}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center space-x-1.5 transition-all ${
+                    viewMode === "small"
+                      ? "bg-white text-stone-900 shadow-md font-bold scale-[1.02]"
+                      : "text-stone-400 hover:text-stone-200"
+                  }`}
+                  title="Small compact grid"
+                >
+                  <span>▦</span>
+                  <span>Small</span>
+                </button>
+
+                <button
+                  onClick={() => handleViewModeChange("list")}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center space-x-1.5 transition-all ${
+                    viewMode === "list"
+                      ? "bg-white text-stone-900 shadow-md font-bold scale-[1.02]"
+                      : "text-stone-400 hover:text-stone-200"
+                  }`}
+                  title="Feed list view"
+                >
+                  <span>☰</span>
+                  <span>List</span>
+                </button>
               </div>
             </div>
 
@@ -233,31 +301,137 @@ export default function GalleryPage({ params }: GalleryPageProps) {
               <div className="text-center py-20 text-stone-500 text-sm">
                 No photos have been captured yet for this event.
               </div>
-            ) : (
-              <div className="columns-1 sm:columns-2 md:columns-3 gap-4 space-y-4">
+            ) : viewMode === "large" ? (
+              /* VIEW MODE: LARGE GRID */
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-5">
                 {photos.map((photo) => (
                   <div
                     key={photo.id}
                     onClick={() => setSelectedPhoto(photo)}
-                    className="break-inside-avoid bg-stone-900 border border-stone-800 rounded-2xl overflow-hidden cursor-pointer hover:border-white/30 transition-all shadow-md group relative"
+                    className="bg-stone-900 border border-stone-800 rounded-3xl overflow-hidden cursor-pointer hover:border-white/40 transition-all shadow-lg group relative flex flex-col"
+                  >
+                    <div className="w-full aspect-[3/4] overflow-hidden bg-black relative">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={photo.imageUrl}
+                        alt={`Photo by ${photo.guest.name}`}
+                        loading="lazy"
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                      />
+                      <div className="absolute top-3 right-3 w-8 h-8 rounded-full bg-black/60 backdrop-blur-sm flex items-center justify-center text-white/80 opacity-0 group-hover:opacity-100 transition-opacity">
+                        🔍
+                      </div>
+                    </div>
+                    <div className="p-3.5 flex items-center justify-between text-xs text-stone-300 bg-stone-950 border-t border-stone-800/80">
+                      <div className="flex items-center space-x-2 truncate">
+                        <div className="w-6 h-6 rounded-full bg-stone-800 border border-stone-700 flex items-center justify-center text-[11px] font-bold text-stone-200 flex-shrink-0">
+                          {photo.guest.name.charAt(0).toUpperCase()}
+                        </div>
+                        <span className="font-semibold text-white truncate">
+                          {photo.guest.name}
+                        </span>
+                      </div>
+                      <span className="text-[11px] text-stone-400 font-mono flex-shrink-0">
+                        {new Date(photo.createdAt).toLocaleTimeString([], {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : viewMode === "small" ? (
+              /* VIEW MODE: SMALL TILES */
+              <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-2 sm:gap-3">
+                {photos.map((photo) => (
+                  <div
+                    key={photo.id}
+                    onClick={() => setSelectedPhoto(photo)}
+                    className="aspect-[3/4] bg-stone-900 border border-stone-800 rounded-xl overflow-hidden cursor-pointer hover:border-white/50 transition-all shadow-sm group relative"
                   >
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
                       src={photo.imageUrl}
                       alt={`Photo by ${photo.guest.name}`}
                       loading="lazy"
-                      className="w-full h-auto object-cover group-hover:scale-[1.01] transition-transform duration-300"
+                      className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
                     />
-                    <div className="p-3 flex items-center justify-between text-xs text-stone-300 bg-stone-950 border-t border-stone-800/80">
-                      <span className="font-semibold text-white truncate">
-                        👤 {photo.guest.name}
+                    <div className="absolute bottom-0 inset-x-0 p-1 bg-gradient-to-t from-black/85 via-black/40 to-transparent">
+                      <span className="text-[10px] text-white/95 font-medium block truncate text-center drop-shadow">
+                        {photo.guest.name}
                       </span>
-                      <span className="text-[11px] text-stone-400 font-mono">
-                        {new Date(photo.createdAt).toLocaleTimeString([], {
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              /* VIEW MODE: VERTICAL FEED / LIST */
+              <div className="max-w-md mx-auto space-y-6">
+                {photos.map((photo) => (
+                  <div
+                    key={photo.id}
+                    className="bg-stone-900 border border-stone-800 rounded-3xl overflow-hidden shadow-xl"
+                  >
+                    {/* Post Header */}
+                    <div className="p-3.5 flex items-center justify-between border-b border-stone-800/80 bg-stone-950/60">
+                      <div className="flex items-center space-x-2.5">
+                        <div className="w-8 h-8 rounded-full bg-stone-800 border border-stone-700 flex items-center justify-center text-xs font-bold text-stone-200">
+                          {photo.guest.name.charAt(0).toUpperCase()}
+                        </div>
+                        <div>
+                          <span className="font-bold text-white text-xs block">
+                            {photo.guest.name}
+                          </span>
+                          <span className="text-[10px] text-stone-400 font-mono">
+                            {new Date(photo.createdAt).toLocaleString(undefined, {
+                              month: "short",
+                              day: "numeric",
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            })}
+                          </span>
+                        </div>
+                      </div>
+                      <span className="px-2 py-0.5 rounded text-[10px] font-mono font-medium bg-stone-800 text-stone-300 border border-stone-700">
+                        3:4 Film
                       </span>
+                    </div>
+
+                    {/* Big Photo Container */}
+                    <div
+                      onClick={() => setSelectedPhoto(photo)}
+                      className="w-full aspect-[3/4] bg-black overflow-hidden cursor-zoom-in relative group"
+                    >
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={photo.imageUrl}
+                        alt={`Photo by ${photo.guest.name}`}
+                        loading="lazy"
+                        className="w-full h-full object-cover group-hover:scale-[1.01] transition-transform duration-300"
+                      />
+                    </div>
+
+                    {/* Post Footer Actions */}
+                    <div className="p-3 flex items-center justify-between text-xs bg-stone-950 border-t border-stone-800/80">
+                      <button
+                        onClick={() => setSelectedPhoto(photo)}
+                        className="text-stone-300 hover:text-white flex items-center space-x-1.5 font-medium transition-colors"
+                      >
+                        <span>🔍</span>
+                        <span>View Fullscreen</span>
+                      </button>
+
+                      <a
+                        href={photo.imageUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        download
+                        className="px-3 py-1 bg-stone-800 hover:bg-stone-700 text-stone-200 font-semibold rounded-lg text-xs border border-stone-700 transition-colors flex items-center space-x-1"
+                      >
+                        <span>⬇️</span>
+                        <span>Download</span>
+                      </a>
                     </div>
                   </div>
                 ))}

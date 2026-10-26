@@ -218,6 +218,13 @@ export default function GalleryPage({ params }: GalleryPageProps) {
             parsed.totalPhotos = Math.max(0, parsed.totalPhotos - 1);
           }
           sessionStorage.setItem(`mingle_gallery_cache_${eventId}`, JSON.stringify(parsed));
+
+          // Immediately sync the new top photo as last preview for camera
+          if (parsed.photos && parsed.photos.length > 0) {
+            sessionStorage.setItem(`mingle_last_preview_${eventId}`, parsed.photos[0].imageUrl);
+          } else {
+            sessionStorage.removeItem(`mingle_last_preview_${eventId}`);
+          }
         }
       } catch (_) {}
     }

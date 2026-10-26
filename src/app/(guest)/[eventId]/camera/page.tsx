@@ -63,7 +63,7 @@ export default function CameraPage({ params }: CameraPageProps) {
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const deletedPhotoIdsRef = useRef<Set<string>>(new Set());
 
-  // Load previously deleted photo IDs from sessionStorage on mount
+  // Load previously deleted photo IDs & cached lastPreview from sessionStorage on mount
   useEffect(() => {
     if (typeof window !== "undefined") {
       try {
@@ -73,6 +73,10 @@ export default function CameraPage({ params }: CameraPageProps) {
           if (Array.isArray(arr)) {
             arr.forEach((id: string) => deletedPhotoIdsRef.current.add(id));
           }
+        }
+        const cachedLastPreview = sessionStorage.getItem(`mingle_last_preview_${eventId}`);
+        if (cachedLastPreview) {
+          setLastPreview(cachedLastPreview);
         }
       } catch (_) {}
     }
@@ -131,22 +135,28 @@ export default function CameraPage({ params }: CameraPageProps) {
             });
 
           // Pending uploads always stay on top
-          return pending.length > 0 ? [...pending, ...serverPhotos] : serverPhotos;
-        });
+          const combined = pending.length > 0 ? [...pending, ...serverPhotos] : serverPhotos;
 
-        // Retain lastPreview if already showing an in-memory blob or current photo
-        setLastPreview((prev) => {
-          const activePhotos = data.photos.filter(
-            (sp: GuestPhotoItem) => !deletedPhotoIdsRef.current.has(sp.id)
-          );
-          if (prev) {
-            // Check if current preview was from a deleted photo
-            const wasDeleted = Array.from(deletedPhotoIdsRef.current).some(
-              (id) => prev.includes(encodeURIComponent(id)) || prev.includes(id)
-            );
-            if (!wasDeleted) return prev;
+          // Synchronize lastPreview strictly from the newest valid photo (never resurrected)
+          if (combined.length > 0) {
+            const newest = combined[0];
+            const newestUrl = newest.previewUrl || newest.imageUrl;
+            setLastPreview(newestUrl);
+            if (typeof window !== "undefined") {
+              try {
+                sessionStorage.setItem(`mingle_last_preview_${eventId}`, newestUrl);
+              } catch (_) {}
+            }
+          } else {
+            setLastPreview(null);
+            if (typeof window !== "undefined") {
+              try {
+                sessionStorage.removeItem(`mingle_last_preview_${eventId}`);
+              } catch (_) {}
+            }
           }
-          return activePhotos.length > 0 ? activePhotos[0].imageUrl : null;
+
+          return combined;
         });
       }
       if (data.photoCount !== undefined) {
@@ -671,11 +681,20 @@ export default function CameraPage({ params }: CameraPageProps) {
     setMyPhotos(updatedList);
     const newPhotosCount = Math.max(0, photosTaken - 1);
     setPhotosTaken(newPhotosCount);
-    setLastPreview(
+    const nextPreview =
       updatedList.length > 0
         ? updatedList[0].previewUrl || updatedList[0].imageUrl
-        : null
-    );
+        : null;
+    setLastPreview(nextPreview);
+    if (typeof window !== "undefined") {
+      try {
+        if (nextPreview) {
+          sessionStorage.setItem(`mingle_last_preview_${eventId}`, nextPreview);
+        } else {
+          sessionStorage.removeItem(`mingle_last_preview_${eventId}`);
+        }
+      } catch (_) {}
+    }
     setConfirmDeleteId(null);
     setDeletingPhotoId(null);
 

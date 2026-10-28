@@ -584,6 +584,33 @@ function applyPixelColorGradingAndGrain(
       d[i + 2] = b < 0 ? 0 : b > 255 ? 255 : (b | 0);
     }
 
+    // Adaptive Micro-Sharpening for Flash Photos:
+    // Low-light camera sensors apply strong internal noise-reduction smoothing.
+    // This high-frequency unsharp enhancement recovers crisp details and razor-sharp textures on the illuminated subject.
+    if (hasFlash) {
+      const stride = width * 4;
+      const endLimit = len - stride;
+      for (let i = stride; i < endLimit; i += 4) {
+        const curR = d[i];
+        const curG = d[i + 1];
+        const curB = d[i + 2];
+        const curLum = 0.299 * curR + 0.587 * curG + 0.114 * curB;
+
+        // Only sharpen the illuminated subject (avoiding dark background void and extreme highlights)
+        if (curLum > 42 && curLum < 215) {
+          const leftLum = 0.299 * d[i - 4] + 0.587 * d[i - 3] + 0.114 * d[i - 2];
+          const rightLum = 0.299 * d[i + 4] + 0.587 * d[i + 5] + 0.114 * d[i + 6];
+          const delta = (curLum * 2 - leftLum - rightLum) * 0.28;
+
+          if (delta > -25 && delta < 25) {
+            d[i] = Math.min(255, Math.max(0, (curR + delta) | 0));
+            d[i + 1] = Math.min(255, Math.max(0, (curG + delta) | 0));
+            d[i + 2] = Math.min(255, Math.max(0, (curB + delta) | 0));
+          }
+        }
+      }
+    }
+
     ctx.putImageData(imgData, 0, 0);
   } catch (err) {
     console.warn("Could not apply pixel color grading directly:", err);

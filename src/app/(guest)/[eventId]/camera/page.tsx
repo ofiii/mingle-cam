@@ -339,15 +339,14 @@ export default function CameraPage({ params }: CameraPageProps) {
   const isLimitReached = photosTaken >= maxPhotosLimit;
   const remainingShots = Math.max(0, maxPhotosLimit - photosTaken);
 
-  // Trigger Flash burst ONLY during shutter capture ("pas jepret")
+  // Trigger Flash burst (Hardware torch on rear camera or Screen flash on front camera)
   const triggerFlashBurst = async () => {
     if (flashMode !== "on") return;
 
     // Full screen white flash pulse for selfie & ambient fill
     setFlashActive(true);
-    setTimeout(() => setFlashActive(false), 240);
 
-    // Hardware torch instant burst on capture (turns off automatically after 240ms)
+    // Hardware torch instant burst on rear camera
     if (stream && facingMode === "environment") {
       try {
         const track = stream.getVideoTracks()[0];
@@ -356,14 +355,25 @@ export default function CameraPage({ params }: CameraPageProps) {
         if (caps?.torch) {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           await track.applyConstraints({ advanced: [{ torch: true } as any] }).catch(() => {});
-          setTimeout(() => {
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            track.applyConstraints({ advanced: [{ torch: false } as any] }).catch(() => {});
-          }, 240);
         }
       } catch {
         // Torch not supported on iOS Safari
       }
+    }
+  };
+
+  const stopFlashBurst = async () => {
+    setFlashActive(false);
+    if (stream && facingMode === "environment") {
+      try {
+        const track = stream.getVideoTracks()[0];
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const caps = track?.getCapabilities?.() as any;
+        if (caps?.torch) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          await track.applyConstraints({ advanced: [{ torch: false } as any] }).catch(() => {});
+        }
+      } catch {}
     }
   };
 
@@ -442,10 +452,11 @@ export default function CameraPage({ params }: CameraPageProps) {
       navigator.vibrate(40);
     }
 
-    // Flash trigger
-    await triggerFlashBurst();
+    // Flash trigger with physical exposure settling window
     if (flashMode === "on") {
-      await new Promise((r) => setTimeout(r, 60));
+      await triggerFlashBurst();
+      // Allow 160ms for physical camera sensor exposure & AGC to lock in with the bright LED
+      await new Promise((r) => setTimeout(r, 160));
     }
 
     try {
@@ -547,8 +558,56 @@ export default function CameraPage({ params }: CameraPageProps) {
       setIsProcessing(false);
       setStatusMessage("");
       resumeCamera();
+    } finally {
+      if (flashMode === "on") {
+        await stopFlashBurst();
+      }
     }
   };
+
+  // Keep handleShutter reference fresh for hardware key listener
+  const handleShutterRef = useRef(handleShutter);
+  useEffect(() => {
+    handleShutterRef.current = handleShutter;
+  });
+
+  // Hardware Volume Button & Bluetooth Shutter Remote Trigger
+  useEffect(() => {
+    const handleHardwareKeyDown = (e: KeyboardEvent) => {
+      // Don't intercept if user is typing in input or modal is open
+      const activeTag = document.activeElement?.tagName.toLowerCase();
+      if (activeTag === "input" || activeTag === "textarea") return;
+      if (showMyPhotosModal) return;
+
+      const code = e.code;
+      const key = e.key;
+
+      const isVolumeOrShutter =
+        code === "AudioVolumeUp" ||
+        code === "AudioVolumeDown" ||
+        code === "VolumeUp" ||
+        code === "VolumeDown" ||
+        key === "AudioVolumeUp" ||
+        key === "AudioVolumeDown" ||
+        key === "VolumeUp" ||
+        key === "VolumeDown" ||
+        code === "KeyMediaPlayPause" ||
+        code === "MediaTrackNext" ||
+        code === "Space" ||
+        code === "Enter";
+
+      if (isVolumeOrShutter) {
+        e.preventDefault();
+        e.stopPropagation();
+        handleShutterRef.current();
+      }
+    };
+
+    window.addEventListener("keydown", handleHardwareKeyDown, { capture: true, passive: false });
+    return () => {
+      window.removeEventListener("keydown", handleHardwareKeyDown, { capture: true });
+    };
+  }, [showMyPhotosModal]);
 
   // Fallback native camera capture
   const handleFallbackCapture = async (e: React.ChangeEvent<HTMLInputElement>) => {
